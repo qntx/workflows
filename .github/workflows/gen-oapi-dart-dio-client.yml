@@ -122,7 +122,7 @@ jobs:
             -o ${{ inputs.package-name }}-client \
             -t ./openapi-dart-dio-template/template \
             -c ./openapi-dart-dio-template/config.yaml \
-            --additional-properties="pubVersion=${{ steps.spec_version.outputs.VERSION }},pubDescription='A Dart client for the API.',pubHomepage='https://github.com/${{ inputs.client-repo }}',pubRepository='https://github.com/${{ inputs.client-repo }}',modelPackage=${{ inputs.package-name }},pubLibrary=${{ inputs.package-name }}"
+            --additional-properties="pubVersion=${{ steps.spec_version.outputs.VERSION }},pubDescription='A Dart client for the API.',pubHomepage='https://github.com/${{ inputs.client-repo }}',pubRepository='https://github.com/${{ inputs.client-repo }}',modelPackage=${{ inputs.package-name }},pubLibrary=${{ inputs.package-name }},pubName=${{ inputs.package-name }}"
 
       - name: Clean up generator files
         run: |
