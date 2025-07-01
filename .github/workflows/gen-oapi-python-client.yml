@@ -3,16 +3,16 @@ name: Reusable OpenAPI Python Client Generator
 on:
   workflow_call:
     inputs:
-      exchange-name:
-        description: 'The name of the exchange (e.g., bitget, upbit)'
+      spec-path:
+        description: 'Path to the OpenAPI specification file (e.g., apis/spec/openapi.yaml)'
         required: true
         type: string
       client-repo:
-        description: 'The full repository name for the client (e.g., qntx/bitget-rest-python)'
+        description: 'The full repository name for the client (e.g., org/client-repo)'
         required: true
         type: string
       package-name:
-        description: 'The name for the python package (e.g., bitget-rest)'
+        description: 'The name for the Python package (e.g., api-client)'
         required: true
         type: string
     secrets:
@@ -22,7 +22,7 @@ on:
 
 jobs:
   generate:
-    name: Generate ${{ inputs.exchange-name }} Client
+    name: Generate ${{ inputs.package-name }} Client
     runs-on: ubuntu-latest
     steps:
       # Checkout API spec repository
@@ -34,10 +34,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '*'
-      
+
       # Lint OpenAPI Spec
       - name: Lint OpenAPI Spec
-        run: npx @redocly/cli lint apis/${{ inputs.exchange-name }}/openapi.yaml
+        run: npx @redocly/cli lint ${{ inputs.spec-path }}
 
       # Install OpenAPI Generator CLI
       - name: Install OpenAPI Generator CLI
@@ -52,7 +52,7 @@ jobs:
       # Get version from OpenAPI spec
       - name: Get version from OpenAPI spec
         id: spec_version
-        run: echo "VERSION=$(yq e '.info.version' apis/${{ inputs.exchange-name }}/openapi.yaml)" >> $GITHUB_OUTPUT
+        run: echo "VERSION=$(yq e '.info.version' ${{ inputs.spec-path }})" >> $GITHUB_OUTPUT
 
       # Checkout private template for OpenAPI
       - name: Checkout private template for OpenAPI
@@ -63,86 +63,86 @@ jobs:
           path: ./openapi-python-template
 
       # Checkout python client repository
-      - name: Checkout ${{ inputs.exchange-name }} python client repository
+      - name: Checkout ${{ inputs.package-name }} python client repository
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.client-repo }}
           token: ${{ secrets.PAT_TOKEN }}
-          path: ${{ inputs.exchange-name }}-rest-python
+          path: ${{ inputs.package-name }}-client
 
       - name: Clean and Prepare for Generation
         run: |
-            set -e
-            CLIENT_DIR="./${{ inputs.exchange-name }}-rest-python"
-            TEMP_DIR=$(mktemp -d)
+          set -e
+          CLIENT_DIR="./${{ inputs.package-name }}-client"
+          TEMP_DIR=$(mktemp -d)
 
-            echo "Using 'push-down and rebuild' method for cleaning."
-            echo "Preparing to clean directory: $CLIENT_DIR"
-            if [ ! -d "$CLIENT_DIR/.git" ]; then
-                echo "Error: Target directory $CLIENT_DIR does not exist or is not a git repository."
-                exit 1
-            fi
+          echo "Using 'push-down and rebuild' method for cleaning."
+          echo "Preparing to clean directory: $CLIENT_DIR"
+          if [ ! -d "$CLIENT_DIR/.git" ]; then
+              echo "Error: Target directory $CLIENT_DIR does not exist or is not a git repository."
+              exit 1
+          fi
 
-            echo "Backing up .git directory to $TEMP_DIR..."
-            mv "$CLIENT_DIR/.git" "$TEMP_DIR/"
+          echo "Backing up .git directory to $TEMP_DIR..."
+          mv "$CLIENT_DIR/.git" "$TEMP_DIR/"
 
-            echo "Removing old client directory..."
-            rm -rf "$CLIENT_DIR"
+          echo "Removing old client directory..."
+          rm -rf "$CLIENT_DIR"
 
-            echo "Recreating client directory..."
-            mkdir "$CLIENT_DIR"
+          echo "Recreating client directory..."
+          mkdir "$CLIENT_DIR"
 
-            echo "Restoring .git directory..."
-            mv "$TEMP_DIR/.git" "$CLIENT_DIR/"
+          echo "Restoring .git directory..."
+          mv "$TEMP_DIR/.git" "$CLIENT_DIR/"
 
-            echo "Copying .openapi-generator-ignore file..."
-            cp ./openapi-python-template/.openapi-generator-ignore "$CLIENT_DIR/"
+          echo "Copying .openapi-generator-ignore file..."
+          cp ./openapi-python-template/.openapi-generator-ignore "$CLIENT_DIR/"
 
-            echo "Cleaning up temporary directory..."
-            rm -rf "$TEMP_DIR"
+          echo "Cleaning up temporary directory..."
+          rm -rf "$TEMP_DIR"
 
-            echo "Preparation complete. Current contents of $CLIENT_DIR:"
-            ls -la "$CLIENT_DIR"
+          echo "Preparation complete. Current contents of $CLIENT_DIR:"
+          ls -la "$CLIENT_DIR"
 
       - name: Get current date
         id: date
         run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
-      
+
       - name: Update OpenAPI generator config
         run: |
           {
             echo "gitHost: github.com"
-            echo "gitUserId: cx-api"
-            echo "gitRepoId: ${{ inputs.exchange-name }}-rest-python"
+            echo "gitUserId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f1)"
+            echo "gitRepoId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f2)"
           } >> ./openapi-python-template/config.yaml
 
       - name: Generate OpenAPI client
         run: |
           openapi-generator-cli generate \
             -g python \
-            -i apis/${{ inputs.exchange-name }}/openapi.yaml \
-            -o ${{ inputs.exchange-name }}-rest-python \
+            -i ${{ inputs.spec-path }} \
+            -o ${{ inputs.package-name }}-client \
             -t ./openapi-python-template/template \
             -c ./openapi-python-template/config.yaml \
-            --additional-properties="packageName=${{ inputs.package-name }},packageVersion=${{ steps.spec_version.outputs.VERSION }},packageUrl=https://github.com/${{ inputs.exchange-name }}-rest-python"
-      
+            --additional-properties="packageName=${{ inputs.package-name }},packageVersion=${{ steps.spec_version.outputs.VERSION }},packageUrl=https://github.com/${{ inputs.client-repo }}"
+
       - name: Clean up generator files
         run: |
-          cd ${{ inputs.exchange-name }}-rest-python
+          cd ${{ inputs.package-name }}-client
           rm -rf .openapi-generator
           rm -f .openapi-generator-ignore
-      
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
-          path: ./${{ inputs.exchange-name }}-rest-python
-          commit-message: "chore(${{ inputs.exchange-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
-          title: "chore(${{ inputs.exchange-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
+          path: ./${{ inputs.package-name }}-client
+          commit-message: "chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
+          title: "chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
           body: |
-            Automated client regeneration based on changes in `cipher-api-spec`.
+            Automated client regeneration based on changes in API specification.
             Triggered by commit: `${{ github.sha }}`
             Run ID: `${{ github.run_id }}`
-          branch: "chore/bot-${{ inputs.exchange-name }}-autoupdate-${{ github.run_id }}"
+          branch: "chore/bot-${{ inputs.package-name }}-autoupdate-${{ github.run_id }}"
           delete-branch: true
           labels: "automated"
           token: ${{ secrets.PAT_TOKEN }}
