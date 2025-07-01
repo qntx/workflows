@@ -114,6 +114,14 @@ jobs:
         id: date
         run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
+      - name: Update OpenAPI generator config
+        run: |
+          {
+            echo "gitHost: github.com"
+            echo "gitUserId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f1)"
+            echo "gitRepoId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f2)"
+          } >> ./openapi-dart-dio-template/config.yaml
+
       - name: Generate OpenAPI client
         run: |
           openapi-generator-cli generate \
@@ -123,6 +131,9 @@ jobs:
             -t ./openapi-dart-dio-template/template \
             -c ./openapi-dart-dio-template/config.yaml \
             --additional-properties="pubVersion=${{ steps.spec_version.outputs.VERSION }},pubDescription='A Dart client for the API.',pubHomepage='https://github.com/${{ inputs.client-repo }}',pubRepository='https://github.com/${{ inputs.client-repo }}',modelPackage=${{ inputs.package-name }},pubLibrary=${{ inputs.package-name }},pubName=${{ inputs.package-name }}"
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
 
       - name: Run build_runner
         working-directory: ./${{ inputs.package-name }}-client

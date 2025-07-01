@@ -114,6 +114,14 @@ jobs:
         id: date
         run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
+      - name: Update OpenAPI generator config
+        run: |
+          {
+            echo "gitHost: github.com"
+            echo "gitUserId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f1)"
+            echo "gitRepoId: $(echo ${{ inputs.client-repo }} | cut -d'/' -f2)"
+          } >> ./openapi-typescript-axios-template/config.yaml
+
       - name: Generate OpenAPI client
         run: |
           openapi-generator-cli generate \
