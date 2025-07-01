@@ -15,6 +15,11 @@ on:
         description: 'The name for the Go package (e.g., api-client)'
         required: true
         type: string
+      lint-spec:
+        description: 'Whether to lint the OpenAPI specification file'
+        required: false
+        type: boolean
+        default: false
     secrets:
       PAT_TOKEN:
         description: 'A PAT with write access to the client repo'
@@ -37,6 +42,7 @@ jobs:
 
       # Lint OpenAPI Spec
       - name: Lint OpenAPI Spec
+        if: inputs.lint-spec == 'true'
         run: npx @redocly/cli lint ${{ inputs.spec-path }}
 
       # Install OpenAPI Generator CLI
