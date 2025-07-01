@@ -4,25 +4,25 @@ on:
   workflow_call:
     inputs:
       spec-path:
-        description: 'Path to the OpenAPI specification file (e.g., apis/spec/openapi.yaml)'
+        description: "Path to the OpenAPI specification file (e.g., apis/spec/openapi.yaml)"
         required: true
         type: string
       client-repo:
-        description: 'The full repository name for the client (e.g., org/client-repo)'
+        description: "The full repository name for the client (e.g., org/client-repo)"
         required: true
         type: string
       package-name:
-        description: 'The name for the Dart package (e.g., api-client)'
+        description: "The name for the Dart package (e.g., api-client)"
         required: true
         type: string
       lint-spec:
-        description: 'Whether to lint the OpenAPI specification file'
+        description: "Whether to lint the OpenAPI specification file"
         required: false
         type: boolean
         default: false
     secrets:
       PAT_TOKEN:
-        description: 'A PAT with write access to the client repo'
+        description: "A PAT with write access to the client repo"
         required: true
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '*'
+          node-version: "*"
 
       # Lint OpenAPI Spec
       - name: Lint OpenAPI Spec
