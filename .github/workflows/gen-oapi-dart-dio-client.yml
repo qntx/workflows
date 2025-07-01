@@ -124,6 +124,13 @@ jobs:
             -c ./openapi-dart-dio-template/config.yaml \
             --additional-properties="pubVersion=${{ steps.spec_version.outputs.VERSION }},pubDescription='A Dart client for the API.',pubHomepage='https://github.com/${{ inputs.client-repo }}',pubRepository='https://github.com/${{ inputs.client-repo }}',modelPackage=${{ inputs.package-name }},pubLibrary=${{ inputs.package-name }},pubName=${{ inputs.package-name }}"
 
+      - name: Run build_runner
+        working-directory: ./${{ inputs.package-name }}-client
+        run: |
+          dart pub get
+          dart format
+          dart run build_runner build --delete-conflicting-outputs
+
       - name: Clean up generator files
         run: |
           cd ${{ inputs.package-name }}-client
