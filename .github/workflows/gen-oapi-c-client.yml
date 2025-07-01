@@ -1,0 +1,139 @@
+name: Reusable OpenAPI C Client Generator
+
+on:
+  workflow_call:
+    inputs:
+      exchange-name:
+        description: 'The name of the exchange (e.g., bitget, upbit)'
+        required: true
+        type: string
+      client-repo:
+        description: 'The full repository name for the client (e.g., qntx/bitget-rest-c)'
+        required: true
+        type: string
+      package-name:
+        description: 'The name for the c package (e.g., bitget-rest)'
+        required: true
+        type: string
+    secrets:
+      PAT_TOKEN:
+        description: 'A PAT with write access to the client repo'
+        required: true
+
+jobs:
+  generate:
+    name: Generate ${{ inputs.exchange-name }} Client
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout API spec repository
+      - name: Checkout API spec repository
+        uses: actions/checkout@v4
+
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '*'
+      
+      # Lint OpenAPI Spec
+      - name: Lint OpenAPI Spec
+        run: npx @redocly/cli lint apis/${{ inputs.exchange-name }}/openapi.yaml
+
+      # Install OpenAPI Generator CLI
+      - name: Install OpenAPI Generator CLI
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      # Install yq
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      # Get version from OpenAPI spec
+      - name: Get version from OpenAPI spec
+        id: spec_version
+        run: echo "VERSION=$(yq e '.info.version' apis/${{ inputs.exchange-name }}/openapi.yaml)" >> $GITHUB_OUTPUT
+
+      # Checkout private template for OpenAPI
+      - name: Checkout private template for OpenAPI
+        uses: actions/checkout@v4
+        with:
+          repository: qntx/openapi-c-template
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ./openapi-c-template
+
+      # Checkout c client repository
+      - name: Checkout ${{ inputs.exchange-name }} c client repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.client-repo }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ${{ inputs.exchange-name }}-rest-c
+
+      - name: Clean and Prepare for Generation
+        run: |
+            set -e
+            CLIENT_DIR="./${{ inputs.exchange-name }}-rest-c"
+            TEMP_DIR=$(mktemp -d)
+
+            echo "Using 'push-down and rebuild' method for cleaning."
+            echo "Preparing to clean directory: $CLIENT_DIR"
+            if [ ! -d "$CLIENT_DIR/.git" ]; then
+                echo "Error: Target directory $CLIENT_DIR does not exist or is not a git repository."
+                exit 1
+            fi
+
+            echo "Backing up .git directory to $TEMP_DIR..."
+            mv "$CLIENT_DIR/.git" "$TEMP_DIR/"
+
+            echo "Removing old client directory..."
+            rm -rf "$CLIENT_DIR"
+
+            echo "Recreating client directory..."
+            mkdir "$CLIENT_DIR"
+
+            echo "Restoring .git directory..."
+            mv "$TEMP_DIR/.git" "$CLIENT_DIR/"
+
+            echo "Copying .openapi-generator-ignore file..."
+            cp ./openapi-c-template/.openapi-generator-ignore "$CLIENT_DIR/"
+
+            echo "Cleaning up temporary directory..."
+            rm -rf "$TEMP_DIR"
+
+            echo "Preparation complete. Current contents of $CLIENT_DIR:"
+            ls -la "$CLIENT_DIR"
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Generate OpenAPI client
+        run: |
+          openapi-generator-cli generate \
+            -g c \
+            -i apis/${{ inputs.exchange-name }}/openapi.yaml \
+            -o ${{ inputs.exchange-name }}-rest-c \
+            -t ./openapi-c-template/template \
+            -c ./openapi-c-template/config.yaml
+
+      - name: Clean up generator files
+        run: |
+          cd ${{ inputs.exchange-name }}-rest-c
+          rm -rf .openapi-generator
+          rm -f .openapi-generator-ignore
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: ./${{ inputs.exchange-name }}-rest-c
+          commit-message: "chore(${{ inputs.exchange-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
+          title: "chore(${{ inputs.exchange-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
+          body: |
+            Automated client regeneration based on changes in `cipher-api-spec`.
+            Triggered by commit: `${{ github.sha }}`
+            Run ID: `${{ github.run_id }}`
+          branch: "chore/bot-${{ inputs.exchange-name }}-autoupdate-${{ github.run_id }}"
+          delete-branch: true
+          labels: "automated"
+          token: ${{ secrets.PAT_TOKEN }}
