@@ -2,10 +2,6 @@ name: C/C++ CI
 
 on:
   workflow_call:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
