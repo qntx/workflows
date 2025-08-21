@@ -32,7 +32,7 @@ jobs:
     steps:
       # Checkout API spec repository
       - name: Checkout API spec repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Setup Node.js
       - name: Setup Node.js
@@ -62,7 +62,7 @@ jobs:
 
       # Checkout private template for OpenAPI
       - name: Checkout private template for OpenAPI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: qntx/openapi-cpp-qt-template
           token: ${{ secrets.PAT_TOKEN }}
@@ -70,7 +70,7 @@ jobs:
 
       # Checkout cpp-qt client repository
       - name: Checkout ${{ inputs.package-name }} cpp-qt client repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ inputs.client-repo }}
           token: ${{ secrets.PAT_TOKEN }}
