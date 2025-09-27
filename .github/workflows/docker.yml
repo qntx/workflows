@@ -36,13 +36,6 @@ on:
         required: false
         type: string
         default: '.'
-    secrets:
-      registry-username:
-        description: 'Registry username (optional, defaults to github.actor)'
-        required: false
-      registry-password:
-        description: 'Registry password (optional, defaults to GITHUB_TOKEN)'
-        required: false
 
 env:
   REGISTRY: ${{ inputs.registry }}
@@ -84,7 +77,8 @@ jobs:
             type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
