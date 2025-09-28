@@ -7,35 +7,40 @@ on:
   workflow_call:
     inputs:
       registry:
-        description: 'Container registry to push to'
+        description: "Container registry to push to"
         required: false
         type: string
-        default: 'ghcr.io'
+        default: "ghcr.io"
       image-name:
-        description: 'Image name (defaults to repository name)'
+        description: "Image name (defaults to repository name)"
         required: false
         type: string
-        default: ''
+        default: ""
       platforms:
-        description: 'Target platforms for multi-arch build'
+        description: "Target platforms for multi-arch build"
         required: false
         type: string
-        default: 'linux/amd64'
+        default: "linux/amd64"
       push:
-        description: 'Whether to push the image'
+        description: "Whether to push the image"
         required: false
         type: boolean
         default: true
       dockerfile:
-        description: 'Path to Dockerfile'
+        description: "Path to Dockerfile"
         required: false
         type: string
-        default: 'Dockerfile'
+        default: "Dockerfile"
       context:
-        description: 'Build context path'
+        description: "Build context path"
         required: false
         type: string
-        default: '.'
+        default: "."
+      no-cache:
+        description: "Disable build cache (force rebuild)"
+        required: false
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ${{ inputs.registry }}
@@ -47,7 +52,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -89,5 +94,6 @@ jobs:
           push: ${{ inputs.push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: ${{ inputs.no-cache }}
+          cache-from: ${{ !inputs.no-cache && 'type=gha' || '' }}
+          cache-to: ${{ !inputs.no-cache && 'type=gha,mode=max' || '' }}
