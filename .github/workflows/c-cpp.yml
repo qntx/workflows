@@ -8,15 +8,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
-      - name: Configure CMake
-        # Creates a build directory and configures the project using CMake.
-        run: cmake -B build -S .
-      - name: Build
-        # Compiles the project based on the CMake configuration.
-        run: cmake --build build
+    - uses: actions/checkout@v6
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+    - name: Configure CMake
+      # Creates a build directory and configures the project using CMake.
+      run: cmake -B build -S .
+    - name: Build
+      # Compiles the project based on the CMake configuration.
+      run: cmake --build build
     # - name: Test
     #   # Executes tests using CTest. Assumes tests are enabled in CMakeLists.txt.
     #   working-directory: build
