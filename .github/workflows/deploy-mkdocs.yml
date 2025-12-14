@@ -10,7 +10,7 @@ on:
       mkdocs-dependencies:
         required: false
         type: string
-        default: "mkdocs-material"
+        default: "mkdocs-material mkdocstrings mkdocstrings-python mkdocs-minify-plugin"
 
 permissions:
   contents: write
