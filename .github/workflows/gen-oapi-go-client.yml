@@ -131,7 +131,7 @@ jobs:
             -t ./openapi-go-template/template \
             -c ./openapi-go-template/config.yaml \
             --additional-properties="packageName=${{ inputs.package-name }},packageVersion=${{ steps.spec_version.outputs.VERSION }}"
-      
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
