@@ -4,25 +4,25 @@ on:
   workflow_call:
     inputs:
       spec-path:
-        description: "Path to the OpenAPI specification file (e.g., apis/spec/openapi.yaml)"
+        description: 'Path to the OpenAPI specification file (e.g., apis/spec/openapi.yaml)'
         required: true
         type: string
       client-repo:
-        description: "The full repository name for the client (e.g., org/client-repo)"
+        description: 'The full repository name for the client (e.g., org/client-repo)'
         required: true
         type: string
       package-name:
-        description: "The name for the C package (e.g., api-client)"
+        description: 'The name for the C package (e.g., api-client)'
         required: true
         type: string
       lint-spec:
-        description: "Whether to lint the OpenAPI specification file"
+        description: 'Whether to lint the OpenAPI specification file'
         required: false
         type: boolean
         default: false
     secrets:
       PAT_TOKEN:
-        description: "A PAT with write access to the client repo"
+        description: 'A PAT with write access to the client repo'
         required: true
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "*"
+          node-version: '*'
 
       # Lint OpenAPI Spec
       - name: Lint OpenAPI Spec
@@ -141,13 +141,13 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           path: ./${{ inputs.package-name }}-client
-          commit-message: "chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
-          title: "chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}"
+          commit-message: 'chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}'
+          title: 'chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}'
           body: |
             Automated client regeneration based on changes in API specification.
             Triggered by commit: `${{ github.sha }}`
             Run ID: `${{ github.run_id }}`
-          branch: "chore/bot-${{ inputs.package-name }}-autoupdate-${{ github.run_id }}"
+          branch: 'chore/bot-${{ inputs.package-name }}-autoupdate-${{ github.run_id }}'
           delete-branch: true
-          labels: "automated"
+          labels: 'automated'
           token: ${{ secrets.PAT_TOKEN }}

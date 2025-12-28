@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       package:
-        description: "Package name to publish"
+        description: 'Package name to publish'
         required: false
         type: string
     secrets:
       CARGO_REGISTRY_TOKEN:
-        description: "Cargo registry token for publishing"
+        description: 'Cargo registry token for publishing'
         required: true
 
 env:
