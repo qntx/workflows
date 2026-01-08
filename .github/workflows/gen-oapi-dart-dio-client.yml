@@ -149,7 +149,7 @@ jobs:
           rm -f .openapi-generator-ignore
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           path: ./${{ inputs.package-name }}-client
           commit-message: 'chore(${{ inputs.package-name }}): Regen client v${{ steps.spec_version.outputs.VERSION }} on ${{ steps.date.outputs.date }}'
