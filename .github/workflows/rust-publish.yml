@@ -3,8 +3,8 @@ name: Publish to crates.io
 on:
   workflow_call:
     inputs:
-      package:
-        description: 'Package name to publish'
+      packages:
+        description: 'Space-separated list of package names to publish.'
         required: false
         type: string
     secrets:
@@ -28,4 +28,14 @@ jobs:
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish ${{ inputs.package && format('-p {0}', inputs.package) || '' }}
+        run: |
+          if [ -n "${{ inputs.packages }}" ]; then
+            for pkg in ${{ inputs.packages }}; do
+              echo "Publishing $pkg..."
+              cargo publish -p "$pkg"
+              echo "Waiting for crates.io to index $pkg..."
+              sleep 30
+            done
+          else
+            cargo publish
+          fi
