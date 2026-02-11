@@ -21,8 +21,14 @@ jobs:
       - name: Install dependencies
         run: bun install
       - name: Lint
-        run: bun run lint --if-present
+        run: |
+          if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
+            bun run lint
+          fi
       - name: Build
-        run: bun run build --if-present
+        run: |
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            bun run build
+          fi
       - name: Run tests
         run: bun test
