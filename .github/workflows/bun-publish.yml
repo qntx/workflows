@@ -1,17 +1,27 @@
 name: Bun Publish
 
+# Publishes to npm using OIDC Trusted Publishing (no token required).
+# Prerequisites: Configure a trusted publisher on npmjs.com for your package.
+# See: https://docs.npmjs.com/trusted-publishers/
+
 on:
   workflow_call:
     inputs:
       bun-version:
-        description: 'Bun version to use'
+        description: 'Bun version to use for build and test'
         required: false
         type: string
         default: 'latest'
-    secrets:
-      NPM_TOKEN:
-        description: 'NPM authentication token'
-        required: true
+      node-version:
+        description: 'Node.js version to use for publishing (>=22.14.0 required for OIDC)'
+        required: false
+        type: string
+        default: '22'
+
+# Required for OIDC token generation
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   publish:
@@ -32,7 +42,10 @@ jobs:
           fi
       - name: Run tests
         run: bun test
+      # Use npm CLI for publishing since bun publish does not support OIDC yet
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: 'https://registry.npmjs.org'
       - name: Publish to npm
-        run: bun publish --access public --tolerate-republish
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
