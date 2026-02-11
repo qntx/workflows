@@ -13,10 +13,10 @@ on:
         type: string
         default: 'latest'
       node-version:
-        description: 'Node.js version to use for publishing (>=22.14.0 required for OIDC)'
+        description: 'Node.js version to use for publishing (>=24 required, ships npm v11 for OIDC)'
         required: false
         type: string
-        default: '22'
+        default: '24'
 
 # Required for OIDC token generation
 permissions:
@@ -48,4 +48,4 @@ jobs:
           node-version: ${{ inputs.node-version }}
           registry-url: 'https://registry.npmjs.org'
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --access public --provenance
