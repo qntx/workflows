@@ -33,6 +33,6 @@ jobs:
       - name: Run tests
         run: bun test
       - name: Publish to npm
-        run: bunx npm publish --access public
+        run: bun publish --access public --tolerate-republish
         env:
           NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
