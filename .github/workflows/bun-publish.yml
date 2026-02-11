@@ -1,0 +1,35 @@
+name: Bun Publish
+
+on:
+  workflow_call:
+    inputs:
+      bun-version:
+        description: 'Bun version to use'
+        required: false
+        type: string
+        default: 'latest'
+    secrets:
+      NPM_TOKEN:
+        description: 'NPM authentication token'
+        required: true
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+      - name: Install dependencies
+        run: bun install
+      - name: Build
+        run: bun run build --if-present
+      - name: Run tests
+        run: bun test
+      - name: Publish to npm
+        run: bunx npm publish --access public
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
