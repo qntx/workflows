@@ -1,0 +1,111 @@
+name: Sync Folder from Remote Repository
+
+on:
+  workflow_call:
+    inputs:
+      source_repo:
+        description: "Source repository (owner/repo format)"
+        required: true
+        type: string
+      source_branch:
+        description: "Source repository branch"
+        required: false
+        type: string
+        default: "main"
+      source_folder:
+        description: "Folder path in source repository to sync from"
+        required: true
+        type: string
+      target_folder:
+        description: "Target folder path in current repository (default: repo root)"
+        required: false
+        type: string
+        default: "."
+      commit_message:
+        description: "Commit message for the sync"
+        required: false
+        type: string
+        default: "chore: sync files from remote repository"
+      git_user_name:
+        description: "Git user name for commit"
+        required: false
+        type: string
+        default: "github-actions[bot]"
+      git_user_email:
+        description: "Git user email for commit"
+        required: false
+        type: string
+        default: "github-actions[bot]@users.noreply.github.com"
+    secrets:
+      token:
+        description: "GitHub token with repo access (use PAT for private repos)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.token || github.token }}
+
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_repo }}
+          ref: ${{ inputs.source_branch }}
+          token: ${{ secrets.token || github.token }}
+          path: _source_repo
+          sparse-checkout: ${{ inputs.source_folder }}
+          sparse-checkout-cone-mode: false
+
+      - name: Sync files
+        run: |
+          # Ensure target folder exists
+          mkdir -p "${{ inputs.target_folder }}"
+
+          # Remove old files in target folder (to handle deletions from source)
+          if [ "${{ inputs.target_folder }}" = "." ]; then
+            # When syncing to root, only remove files that exist in source folder
+            find "_source_repo/${{ inputs.source_folder }}" -type f | while read src_file; do
+              rel_path="${src_file#_source_repo/${{ inputs.source_folder }}/}"
+              if [ -f "$rel_path" ]; then
+                rm -f "$rel_path"
+              fi
+            done
+          else
+            # When syncing to a subfolder, clean the target first
+            rm -rf "${{ inputs.target_folder }}"
+            mkdir -p "${{ inputs.target_folder }}"
+          fi
+
+          # Copy files from source folder to target
+          cp -r "_source_repo/${{ inputs.source_folder }}/." "${{ inputs.target_folder }}/"
+
+          # Clean up
+          rm -rf _source_repo
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected:"
+            git diff --cached --stat
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "${{ inputs.git_user_name }}"
+          git config user.email "${{ inputs.git_user_email }}"
+          git commit -m "${{ inputs.commit_message }}"
+          git push
