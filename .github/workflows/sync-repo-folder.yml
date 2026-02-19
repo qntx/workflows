@@ -78,6 +78,11 @@ jobs:
               fi
             done
           else
+            # Protect critical directories from being deleted
+            if [[ "${{ inputs.target_folder }}" == ".github" || "${{ inputs.target_folder }}" == ".github/workflows" || "${{ inputs.target_folder }}" == ".git" ]]; then
+              echo "::error::target_folder '${{ inputs.target_folder }}' is a protected directory and cannot be used as sync target."
+              exit 1
+            fi
             # When syncing to a subfolder, clean the target first
             rm -rf "${{ inputs.target_folder }}"
             mkdir -p "${{ inputs.target_folder }}"
