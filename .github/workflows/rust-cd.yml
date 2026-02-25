@@ -1,0 +1,150 @@
+name: CD
+
+on:
+  workflow_call:
+    inputs:
+      bin:
+        description: 'Binary name for the CLI executable (e.g. machi, xmtp)'
+        required: true
+        type: string
+      package:
+        description: 'Cargo package name to build (passed to cargo build -p)'
+        required: true
+        type: string
+      cross_packages:
+        description: 'Space-separated apt packages for ARM64 cross-compilation'
+        required: false
+        type: string
+        default: 'gcc-aarch64-linux-gnu'
+      cross_env:
+        description: 'Newline-separated KEY=VALUE env vars appended during cross-compilation'
+        required: false
+        type: string
+        default: ''
+      cargo_env:
+        description: 'Newline-separated KEY=VALUE global cargo/build env vars'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-latest,
+              cross: true,
+            }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest }
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: '${{ matrix.target }}' }
+      - uses: Swatinem/rust-cache@v2
+        with: { key: '${{ matrix.target }}' }
+
+      # Apply optional global env vars (e.g. CARGO_PROFILE_RELEASE_LTO)
+      - name: Apply extra env vars
+        if: inputs.cargo_env != ''
+        shell: bash
+        env:
+          EXTRA_ENV: ${{ inputs.cargo_env }}
+        run: echo "$EXTRA_ENV" >> "$GITHUB_ENV"
+
+      # Cross-compile for Linux ARM64 on the x86_64 runner.
+      # The Azure apt mirror lacks arm64 packages (actions/runner-images#10901),
+      # so we add ports.ubuntu.com as a separate deb822 source.
+      - name: Setup cross-compilation (Linux ARM64)
+        if: matrix.cross
+        env:
+          CROSS_ENV: ${{ inputs.cross_env }}
+        run: |
+          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          printf '%s\n' \
+            "Types: deb" \
+            "URIs: http://ports.ubuntu.com/ubuntu-ports/" \
+            "Suites: noble noble-updates noble-security" \
+            "Components: main restricted universe multiverse" \
+            "Architectures: arm64" \
+            "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" \
+            | sudo tee /etc/apt/sources.list.d/arm64-cross.sources
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.cross_packages }}
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+          if [ -n "$CROSS_ENV" ]; then
+            echo "$CROSS_ENV" >> "$GITHUB_ENV"
+          fi
+
+      - run: cargo build --release --target ${{ matrix.target }} -p ${{ inputs.package }}
+
+      - name: Package
+        shell: bash
+        run: |
+          bin="${{ inputs.bin }}"
+          ver="${GITHUB_REF_NAME#v}"
+          [[ "$GITHUB_REF_NAME" == v* ]] || ver="0.0.0-dev"
+          target="${{ matrix.target }}"
+          staging="$bin-$ver-$target"
+          exe="$bin"; [[ "$target" == *windows* ]] && exe="$exe.exe"
+
+          mkdir "$staging"
+          cp "target/$target/release/$exe" LICENSE-MIT LICENSE-APACHE "$staging/"
+
+          if [[ "$target" == *windows* ]]; then
+            (cd "$staging" && 7z a "../$staging.zip" .)
+            asset="$staging.zip"
+          else
+            tar czf "$staging.tar.gz" -C "$staging" .
+            asset="$staging.tar.gz"
+          fi
+
+          # SHA-256 checksum
+          if command -v sha256sum &>/dev/null; then sha256sum "$asset" > "$asset.sha256"
+          else shasum -a 256 "$asset" > "$asset.sha256"; fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dist-${{ matrix.target }}
+          path: |
+            ${{ inputs.bin }}-*.*
+            !${{ inputs.bin }}-*/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - uses: actions/download-artifact@v7
+        with: { merge-multiple: true }
+
+      - name: Generate changelog
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with: { args: '--latest --strip header' }
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.cliff.outputs.content }}
+          files: |
+            ${{ inputs.bin }}-*.tar.gz
+            ${{ inputs.bin }}-*.zip
+            ${{ inputs.bin }}-*.sha256
