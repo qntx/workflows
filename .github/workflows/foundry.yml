@@ -1,4 +1,6 @@
-name: CI
+name: Foundry CI
+
+permissions: {}
 
 on:
   workflow_call:
@@ -10,6 +12,8 @@ jobs:
   check:
     name: Foundry project
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
