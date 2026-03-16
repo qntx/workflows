@@ -4,41 +4,41 @@ on:
   workflow_call:
     inputs:
       source_repo:
-        description: "Source repository (owner/repo format)"
+        description: 'Source repository (owner/repo format)'
         required: true
         type: string
       source_branch:
-        description: "Source repository branch"
+        description: 'Source repository branch'
         required: false
         type: string
-        default: "main"
+        default: 'main'
       source_folder:
-        description: "Folder path in source repository to sync from"
+        description: 'Folder path in source repository to sync from'
         required: true
         type: string
       target_folder:
-        description: "Target folder path in current repository (default: repo root)"
+        description: 'Target folder path in current repository (default: repo root)'
         required: false
         type: string
-        default: "."
+        default: '.'
       commit_message:
-        description: "Commit message for the sync"
+        description: 'Commit message for the sync'
         required: false
         type: string
-        default: "chore: sync files from remote repository"
+        default: 'chore: sync files from remote repository'
       git_user_name:
-        description: "Git user name for commit"
+        description: 'Git user name for commit'
         required: false
         type: string
-        default: "github-actions[bot]"
+        default: 'github-actions[bot]'
       git_user_email:
-        description: "Git user email for commit"
+        description: 'Git user email for commit'
         required: false
         type: string
-        default: "github-actions[bot]@users.noreply.github.com"
+        default: 'github-actions[bot]@users.noreply.github.com'
     secrets:
       token:
-        description: "GitHub token with repo access (use PAT for private repos)"
+        description: 'GitHub token with repo access (use PAT for private repos)'
         required: false
 
 permissions:

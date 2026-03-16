@@ -20,6 +20,9 @@ jobs:
       - name: Tidy
         run: go mod tidy
 
+      - name: Vet
+        run: go vet ./...
+
       - name: Build
         run: go build -v ./...
 
