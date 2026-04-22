@@ -48,11 +48,28 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -euo pipefail
           case "${{ inputs.package-manager }}" in
-            npm)   npm ci ;;
-            pnpm)  corepack enable && pnpm install --frozen-lockfile ;;
-            yarn)  corepack enable && yarn install --immutable ;;
-            *)     echo "Unsupported package manager: ${{ inputs.package-manager }}" >&2; exit 1 ;;
+            npm)
+              npm ci
+              ;;
+            pnpm)
+              corepack enable
+              pnpm install --frozen-lockfile
+              ;;
+            yarn)
+              corepack enable
+              # yarn >=2 uses --immutable; yarn 1.x uses --frozen-lockfile.
+              if yarn --version | grep -q '^1\.'; then
+                yarn install --frozen-lockfile
+              else
+                yarn install --immutable
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported package manager: ${{ inputs.package-manager }}"
+              exit 1
+              ;;
           esac
 
       - name: Lint

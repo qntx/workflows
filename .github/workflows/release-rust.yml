@@ -105,18 +105,22 @@ jobs:
           fi
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} -p ${{ inputs.package }}
+        run: cargo build --release --locked --target ${{ matrix.target }} -p ${{ inputs.package }}
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
           bin="${{ inputs.bin }}"
-          ver="${GITHUB_REF_NAME#v}"
-          [[ "$GITHUB_REF_NAME" == v* ]] || ver="0.0.0-dev"
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver="0.0.0-dev"
+          fi
           target="${{ matrix.target }}"
           staging="$bin-$ver-$target"
-          exe="$bin"; [[ "$target" == *windows* ]] && exe="$exe.exe"
+          exe="$bin"
+          [[ "$target" == *windows* ]] && exe="$exe.exe"
 
           mkdir -p dist "$staging"
           cp "target/$target/release/$exe" "$staging/"

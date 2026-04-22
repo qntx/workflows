@@ -49,12 +49,15 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -euo pipefail
           if [ -f pyproject.toml ]; then
-            # uv sync installs dev groups automatically when declared in [dependency-groups].
             uv sync --all-extras
             echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           elif [ -f requirements.txt ]; then
-            uv pip install --system -r requirements.txt
+            uv pip install --system -r requirements.txt ruff pytest
+          else
+            echo "::error::Neither pyproject.toml nor requirements.txt found."
+            exit 1
           fi
 
       - name: Lint

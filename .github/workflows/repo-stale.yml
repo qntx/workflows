@@ -24,10 +24,10 @@ on:
         type: number
         default: 10
       only-labels:
-        description: 'Comma-separated labels required for items to be considered. Empty means no filter.'
+        description: 'Comma-separated labels required for items to be considered. Empty means no filter (default).'
         required: false
         type: string
-        default: 'awaiting-feedback,awaiting-answers'
+        default: ''
       exempt-labels:
         description: 'Comma-separated labels that exempt items from being marked stale.'
         required: false

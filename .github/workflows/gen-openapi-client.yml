@@ -43,6 +43,11 @@ on:
         required: false
         type: string
         default: 'lts/*'
+      generator-cli-version:
+        description: 'Pinned version of @openapitools/openapi-generator-cli (e.g. 2.23.1). Empty uses latest.'
+        required: false
+        type: string
+        default: ''
       lint-spec:
         description: 'Lint the OpenAPI specification before generation.'
         required: false
@@ -97,7 +102,14 @@ jobs:
         run: npx --yes @redocly/cli lint ${{ inputs.spec-path }}
 
       - name: Install OpenAPI Generator CLI
-        run: npm install -g @openapitools/openapi-generator-cli
+        env:
+          CLI_VERSION: ${{ inputs.generator-cli-version }}
+        run: |
+          if [ -n "$CLI_VERSION" ]; then
+            npm install -g "@openapitools/openapi-generator-cli@$CLI_VERSION"
+          else
+            npm install -g @openapitools/openapi-generator-cli
+          fi
 
       - name: Install yq
         uses: mikefarah/yq@master
@@ -123,6 +135,7 @@ jobs:
           repository: ${{ inputs.client-repo }}
           token: ${{ secrets.PAT_TOKEN }}
           path: ${{ inputs.package-name }}-client
+          persist-credentials: false
 
       - name: Reset client working tree
         shell: bash

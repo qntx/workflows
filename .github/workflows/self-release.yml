@@ -1,7 +1,14 @@
 name: Self Release
+
 on:
   push:
     tags: ['v*']
+
+permissions:
+  contents: read
+
 jobs:
   release:
+    permissions:
+      contents: write
     uses: ./.github/workflows/release.yml

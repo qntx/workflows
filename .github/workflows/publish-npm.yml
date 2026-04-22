@@ -31,7 +31,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  attestations: write
 
 concurrency:
   group: publish-${{ github.ref }}

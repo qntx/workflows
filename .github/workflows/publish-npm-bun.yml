@@ -37,7 +37,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  attestations: write
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -68,7 +67,9 @@ jobs:
 
       - name: Test
         run: |
-          if find . -maxdepth 3 \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) -print -quit | grep -q .; then
+          if find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
+               \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
+               -print -quit | grep -q .; then
             bun test
           fi
 
