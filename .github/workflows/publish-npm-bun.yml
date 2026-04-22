@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: 'public'
+      registry-url:
+        description: 'npm registry URL.'
+        required: false
+        type: string
+        default: 'https://registry.npmjs.org'
     secrets:
       NPM_TOKEN:
         description: 'Optional npm token fallback if Trusted Publishing is not configured.'
@@ -70,7 +75,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node-version }}
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: ${{ inputs.registry-url }}
 
       - name: Publish to npm
         env:

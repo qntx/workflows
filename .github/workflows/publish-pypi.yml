@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: ''
+      environment:
+        description: 'GitHub environment name (must match the environment configured for the trusted publisher on pypi.org, if any). Leave empty to skip environment protection.'
+        required: false
+        type: string
+        default: ''
     secrets:
       PYPI_API_TOKEN:
         description: 'Optional PyPI API token fallback if Trusted Publishing is not configured.'
@@ -37,8 +42,7 @@ jobs:
     name: Build & Publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: pypi
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -54,7 +58,9 @@ jobs:
         run: uv build
 
       - name: Check distribution
-        run: uvx twine check dist/*
+        run: |
+          uv pip install --system twine
+          twine check dist/*
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

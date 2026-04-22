@@ -53,6 +53,14 @@ jobs:
             echo 'No lint script defined, skipping.'
           fi
 
+      - name: Typecheck
+        run: |
+          if jq -e '.scripts.typecheck' package.json > /dev/null 2>&1; then
+            bun run typecheck
+          else
+            echo 'No typecheck script defined, skipping.'
+          fi
+
       - name: Build
         run: |
           if jq -e '.scripts.build' package.json > /dev/null 2>&1; then

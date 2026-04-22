@@ -17,12 +17,12 @@ on:
         description: 'Command used to lint the project.'
         required: false
         type: string
-        default: 'uv run ruff check .'
+        default: 'ruff check .'
       test-command:
         description: 'Command used to run tests.'
         required: false
         type: string
-        default: 'uv run pytest --verbose'
+        default: 'pytest --verbose'
 
 permissions:
   contents: read
@@ -50,13 +50,11 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f pyproject.toml ]; then
-            uv sync --all-extras --dev
+            # uv sync installs dev groups automatically when declared in [dependency-groups].
+            uv sync --all-extras
+            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           elif [ -f requirements.txt ]; then
-            uv venv
-            uv pip install -r requirements.txt ruff pytest
-          else
-            uv venv
-            uv pip install ruff pytest
+            uv pip install --system -r requirements.txt
           fi
 
       - name: Lint

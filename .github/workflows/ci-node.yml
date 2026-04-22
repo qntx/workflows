@@ -55,8 +55,34 @@ jobs:
             *)     echo "Unsupported package manager: ${{ inputs.package-manager }}" >&2; exit 1 ;;
           esac
 
+      - name: Lint
+        run: |
+          if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
+            ${{ inputs.package-manager }} run lint
+          else
+            echo 'No lint script defined, skipping.'
+          fi
+
+      - name: Typecheck
+        run: |
+          if jq -e '.scripts.typecheck' package.json > /dev/null 2>&1; then
+            ${{ inputs.package-manager }} run typecheck
+          else
+            echo 'No typecheck script defined, skipping.'
+          fi
+
       - name: Build
-        run: ${{ inputs.package-manager }} run build --if-present
+        run: |
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            ${{ inputs.package-manager }} run build
+          else
+            echo 'No build script defined, skipping.'
+          fi
 
       - name: Test
-        run: ${{ inputs.package-manager }} test
+        run: |
+          if jq -e '.scripts.test' package.json > /dev/null 2>&1; then
+            ${{ inputs.package-manager }} test
+          else
+            echo 'No test script defined, skipping.'
+          fi

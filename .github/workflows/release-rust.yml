@@ -110,6 +110,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          set -euo pipefail
           bin="${{ inputs.bin }}"
           ver="${GITHUB_REF_NAME#v}"
           [[ "$GITHUB_REF_NAME" == v* ]] || ver="0.0.0-dev"
@@ -117,7 +118,7 @@ jobs:
           staging="$bin-$ver-$target"
           exe="$bin"; [[ "$target" == *windows* ]] && exe="$exe.exe"
 
-          mkdir "$staging"
+          mkdir -p dist "$staging"
           cp "target/$target/release/$exe" "$staging/"
           # Copy any LICENSE* and README* files that exist (tolerant to single-license projects).
           shopt -s nullglob
@@ -125,11 +126,11 @@ jobs:
           shopt -u nullglob
 
           if [[ "$target" == *windows* ]]; then
-            (cd "$staging" && 7z a "../$staging.zip" .)
-            asset="$staging.zip"
+            (cd "$staging" && 7z a "../dist/$staging.zip" .)
+            asset="dist/$staging.zip"
           else
-            tar czf "$staging.tar.gz" -C "$staging" .
-            asset="$staging.tar.gz"
+            tar czf "dist/$staging.tar.gz" -C "$staging" .
+            asset="dist/$staging.tar.gz"
           fi
 
           if command -v sha256sum &>/dev/null; then
@@ -138,12 +139,13 @@ jobs:
             shasum -a 256 "$asset" > "$asset.sha256"
           fi
 
+          rm -rf "$staging"
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
-          path: |
-            ${{ inputs.bin }}-*.*
-            !${{ inputs.bin }}-*/
+          path: dist/
+          if-no-files-found: error
 
   release:
     name: Publish GitHub Release

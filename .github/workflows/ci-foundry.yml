@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: 'stable'
+      foundry-profile:
+        description: 'Foundry profile to use (requires a matching [profile.*] section in foundry.toml).'
+        required: false
+        type: string
+        default: 'default'
 
 permissions:
   contents: read
@@ -17,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FOUNDRY_PROFILE: ci
+  FOUNDRY_PROFILE: ${{ inputs.foundry-profile }}
 
 jobs:
   check:
