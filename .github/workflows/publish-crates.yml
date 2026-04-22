@@ -61,28 +61,12 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          wait_for_crate() {
-            local pkg="$1"
-            local version
-            version=$(cargo metadata --format-version 1 --no-deps | jq -r ".packages[] | select(.name == \"$pkg\") | .version")
-            for i in $(seq 1 30); do
-              if cargo search "$pkg" --limit 1 | grep -q "^$pkg = \"$version\""; then
-                echo "$pkg@$version is indexed."
-                return 0
-              fi
-              echo "Waiting for $pkg@$version to appear on crates.io ($i/30)..."
-              sleep 5
-            done
-            echo "Timed out waiting for $pkg@$version." >&2
-            return 1
-          }
-
           if [ -n "${{ inputs.packages }}" ]; then
             for pkg in ${{ inputs.packages }}; do
-              echo "Publishing $pkg..."
-              cargo publish -p "$pkg"
-              wait_for_crate "$pkg"
+              echo "::group::Publishing $pkg"
+              cargo publish -p "$pkg" --locked
+              echo "::endgroup::"
             done
           else
-            cargo publish
+            cargo publish --locked
           fi
