@@ -36,10 +36,11 @@ All workflows are invoked via `workflow_call` and share a common hardening basel
 | `publish-pypi.yml`    | PyPI OIDC Trusted Publishing with attestations via `pypa/gh-action-pypi-publish`.   |
 | `publish-crates.yml`  | `cargo publish` with sparse-index polling (no hard-coded sleep).                    |
 
-### Release (binary artifacts + GitHub Release)
+### Release (GitHub Release + changelog)
 
 | Workflow           | Purpose                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `release.yml`      | Generic tag → GitHub Release with `git-cliff` changelog. Optional asset upload via `files` glob or `download-artifacts`. Suitable for any repository.   |
 | `release-rust.yml` | Cross-platform Rust binary matrix (Linux x86_64/arm64, macOS arm64, Windows x86_64/arm64) with `git-cliff` changelog and `softprops/action-gh-release`. |
 
 ### Deploy (hosted sites)
@@ -107,6 +108,23 @@ jobs:
       package-name: my-api
     secrets:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+```
+
+A generic tag-triggered release (works for docs, libraries, contracts, anything):
+
+```yaml
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    uses: qntx/workflows/.github/workflows/release.yml@main
+    # Optional: attach build outputs to the release.
+    # with:
+    #   files: |
+    #     dist/*.tar.gz
+    #     dist/*.whl
 ```
 
 See each workflow's `inputs:` and `secrets:` blocks for the full parameter list.

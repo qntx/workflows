@@ -1,0 +1,138 @@
+name: Release
+
+# Generic "tag -> GitHub Release" workflow. Generates a changelog with git-cliff
+# and publishes a GitHub Release. Optionally uploads assets from the workspace
+# or from artifacts produced by the caller's workflow run.
+#
+# Use release-rust.yml instead if you need cross-platform Rust binary matrices.
+
+on:
+  workflow_call:
+    inputs:
+      files:
+        description: 'Newline-separated glob patterns of assets to attach to the release.'
+        required: false
+        type: string
+        default: ''
+      download-artifacts:
+        description: 'Download all artifacts from the current workflow run before creating the release.'
+        required: false
+        type: boolean
+        default: false
+      artifact-pattern:
+        description: 'Only download artifacts whose name matches this pattern (ignored if download-artifacts is false).'
+        required: false
+        type: string
+        default: ''
+      draft:
+        description: 'Create the release as a draft.'
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Prerelease flag. Use "auto" to detect alpha/beta/rc/pre/dev/nightly in the tag name.'
+        required: false
+        type: string
+        default: 'auto'
+      cliff-config:
+        description: 'Path to a git-cliff configuration file (empty uses the action default).'
+        required: false
+        type: string
+        default: ''
+      cliff-args:
+        description: 'Arguments passed to git-cliff.'
+        required: false
+        type: string
+        default: '--latest --strip header'
+      tag-name:
+        description: 'Tag name for the release. Defaults to the tag that triggered the workflow.'
+        required: false
+        type: string
+        default: ''
+      name:
+        description: 'Release title. Defaults to the tag name.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        env:
+          EXPLICIT: ${{ inputs.tag-name }}
+        run: |
+          if [ -n "$EXPLICIT" ]; then
+            tag="$EXPLICIT"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            echo '::error::No tag available; pass tag-name or trigger this workflow from a tag.'
+            exit 1
+          fi
+          echo "name=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve prerelease flag
+        id: pre
+        shell: bash
+        env:
+          MODE: ${{ inputs.prerelease }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          case "$MODE" in
+            auto)
+              if [[ "$TAG" =~ (alpha|beta|rc|pre|preview|dev|nightly) ]]; then
+                flag=true
+              else
+                flag=false
+              fi
+              ;;
+            true) flag=true ;;
+            false) flag=false ;;
+            *)
+              echo "::error::prerelease must be 'auto', 'true', or 'false' (got: $MODE)"
+              exit 1
+              ;;
+          esac
+          echo "flag=$flag" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        if: inputs.download-artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          pattern: ${{ inputs.artifact-pattern || '*' }}
+
+      - name: Generate changelog
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: ${{ inputs.cliff-config }}
+          args: ${{ inputs.cliff-args }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ inputs.name || steps.tag.outputs.name }}
+          body: ${{ steps.cliff.outputs.content }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ steps.pre.outputs.flag }}
+          files: ${{ inputs.files }}
+          make_latest: ${{ steps.pre.outputs.flag == 'false' && 'true' || 'false' }}
