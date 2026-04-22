@@ -1,0 +1,88 @@
+name: Publish to crates.io
+
+on:
+  workflow_call:
+    inputs:
+      packages:
+        description: 'Space-separated list of package names to publish. Empty publishes the root crate.'
+        required: false
+        type: string
+        default: ''
+      toolchain:
+        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+        required: false
+        type: string
+        default: 'stable'
+    secrets:
+      CARGO_REGISTRY_TOKEN:
+        description: 'Cargo registry token for publishing.'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Build, Test & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --release --verbose
+
+      - name: Test
+        run: cargo test --workspace --verbose
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          wait_for_crate() {
+            local pkg="$1"
+            local version
+            version=$(cargo metadata --format-version 1 --no-deps | jq -r ".packages[] | select(.name == \"$pkg\") | .version")
+            for i in $(seq 1 30); do
+              if cargo search "$pkg" --limit 1 | grep -q "^$pkg = \"$version\""; then
+                echo "$pkg@$version is indexed."
+                return 0
+              fi
+              echo "Waiting for $pkg@$version to appear on crates.io ($i/30)..."
+              sleep 5
+            done
+            echo "Timed out waiting for $pkg@$version." >&2
+            return 1
+          }
+
+          if [ -n "${{ inputs.packages }}" ]; then
+            for pkg in ${{ inputs.packages }}; do
+              echo "Publishing $pkg..."
+              cargo publish -p "$pkg"
+              wait_for_crate "$pkg"
+            done
+          else
+            cargo publish
+          fi

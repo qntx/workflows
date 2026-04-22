@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+# Default path: OIDC Trusted Publishing via pypa/gh-action-pypi-publish.
+# Prerequisite: configure a trusted publisher at pypi.org for the project.
+# Fallback: pass PYPI_API_TOKEN secret if trusted publishing is not configured.
+# See: https://docs.pypi.org/trusted-publishers/
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use for building.'
+        required: false
+        type: string
+        default: '3.13'
+      repository-url:
+        description: 'PyPI repository URL (use test.pypi.org for staging).'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      PYPI_API_TOKEN:
+        description: 'Optional PyPI API token fallback if Trusted Publishing is not configured.'
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ inputs.python-version }}
+
+      - name: Build package
+        run: uv build
+
+      - name: Check distribution
+        run: uvx twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          repository-url: ${{ inputs.repository-url }}
+          attestations: true

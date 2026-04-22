@@ -1,0 +1,66 @@
+name: Python CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use.'
+        required: false
+        type: string
+        default: '3.13'
+      submodules:
+        description: 'Enable git submodules checkout.'
+        required: false
+        type: boolean
+        default: false
+      lint-command:
+        description: 'Command used to lint the project.'
+        required: false
+        type: string
+        default: 'uv run ruff check .'
+      test-command:
+        description: 'Command used to run tests.'
+        required: false
+        type: string
+        default: 'uv run pytest --verbose'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || '' }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: |
+          if [ -f pyproject.toml ]; then
+            uv sync --all-extras --dev
+          elif [ -f requirements.txt ]; then
+            uv venv
+            uv pip install -r requirements.txt ruff pytest
+          else
+            uv venv
+            uv pip install ruff pytest
+          fi
+
+      - name: Lint
+        run: ${{ inputs.lint-command }}
+
+      - name: Test
+        run: ${{ inputs.test-command }}

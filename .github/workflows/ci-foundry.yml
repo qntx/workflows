@@ -1,9 +1,20 @@
 name: Foundry CI
 
-permissions: {}
-
 on:
   workflow_call:
+    inputs:
+      foundry-version:
+        description: 'Foundry toolchain version (stable, nightly, or a commit).'
+        required: false
+        type: string
+        default: 'stable'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ci
@@ -12,8 +23,7 @@ jobs:
   check:
     name: Foundry project
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
         with:
@@ -22,6 +32,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ inputs.foundry-version }}
 
       - name: Show Forge version
         run: forge --version

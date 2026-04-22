@@ -1,0 +1,42 @@
+name: Dart CI
+
+on:
+  workflow_call:
+    inputs:
+      sdk:
+        description: 'Dart SDK channel or exact version (stable, beta, dev, or a version like 3.4.0).'
+        required: false
+        type: string
+        default: 'stable'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ inputs.sdk }}
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Test
+        run: dart test

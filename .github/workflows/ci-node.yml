@@ -1,0 +1,62 @@
+name: Node.js CI
+
+on:
+  workflow_call:
+    inputs:
+      node-versions:
+        description: 'JSON array of Node.js versions to test against.'
+        required: false
+        type: string
+        default: '["20", "22", "24"]'
+      package-manager:
+        description: 'Package manager to use (npm, pnpm, yarn).'
+        required: false
+        type: string
+        default: 'npm'
+      fail-fast:
+        description: 'Abort the matrix on the first failure.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: ${{ inputs.fail-fast }}
+      matrix:
+        node-version: ${{ fromJSON(inputs.node-versions) }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: ${{ inputs.package-manager }}
+
+      - name: Install dependencies
+        run: |
+          case "${{ inputs.package-manager }}" in
+            npm)   npm ci ;;
+            pnpm)  corepack enable && pnpm install --frozen-lockfile ;;
+            yarn)  corepack enable && yarn install --immutable ;;
+            *)     echo "Unsupported package manager: ${{ inputs.package-manager }}" >&2; exit 1 ;;
+          esac
+
+      - name: Build
+        run: ${{ inputs.package-manager }} run build --if-present
+
+      - name: Test
+        run: ${{ inputs.package-manager }} test

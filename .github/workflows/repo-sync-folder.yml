@@ -1,0 +1,130 @@
+name: Sync Folder from Remote Repository
+
+on:
+  workflow_call:
+    inputs:
+      source-repo:
+        description: 'Source repository (owner/repo format).'
+        required: true
+        type: string
+      source-branch:
+        description: 'Source repository branch.'
+        required: false
+        type: string
+        default: 'main'
+      source-folder:
+        description: 'Folder path in source repository to sync from.'
+        required: true
+        type: string
+      target-folder:
+        description: 'Target folder path in current repository (default repo root).'
+        required: false
+        type: string
+        default: '.'
+      commit-message:
+        description: 'Commit message for the sync.'
+        required: false
+        type: string
+        default: 'chore: sync files from remote repository'
+      git-user-name:
+        description: 'Git user name for the commit.'
+        required: false
+        type: string
+        default: 'github-actions[bot]'
+      git-user-email:
+        description: 'Git user email for the commit.'
+        required: false
+        type: string
+        default: 'github-actions[bot]@users.noreply.github.com'
+    secrets:
+      token:
+        description: 'GitHub token with repo access (use a PAT for cross-repo private access).'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.token || github.token }}
+
+      - name: Checkout source repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.source-repo }}
+          ref: ${{ inputs.source-branch }}
+          token: ${{ secrets.token || github.token }}
+          path: _source_repo
+          sparse-checkout: ${{ inputs.source-folder }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Sync files
+        shell: bash
+        env:
+          SRC: _source_repo/${{ inputs.source-folder }}
+          RAW_DST: ${{ inputs.target-folder }}
+        run: |
+          set -euo pipefail
+          # Normalise the target path (strip trailing slashes, collapse './').
+          dst="$(realpath -m --relative-to=. "$RAW_DST")"
+
+          case "$dst" in
+            .github|.github/workflows|.git|.git/*)
+              echo "::error::Refusing to sync into protected directory: $dst"
+              exit 1
+              ;;
+          esac
+
+          if [ "$dst" = "." ]; then
+            # Root-level sync: mirror source into repo root without deleting unrelated files.
+            rsync -a --exclude='.git' "$SRC"/ ./
+          else
+            # Subfolder sync: --delete removes files no longer present in the source.
+            mkdir -p "$dst"
+            rsync -a --delete "$SRC"/ "$dst"/
+          fi
+
+          rm -rf _source_repo
+
+      - name: Check for changes
+        id: changes
+        shell: bash
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo 'No changes detected.'
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo 'Changes detected:'
+            git diff --cached --stat
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          git config user.name  "${{ inputs.git-user-name }}"
+          git config user.email "${{ inputs.git-user-email }}"
+          git commit -m "${{ inputs.commit-message }}"
+          # Retry push to tolerate concurrent updates on the target branch.
+          for i in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push attempt $i failed, rebasing..."
+            git pull --rebase
+          done
+          echo '::error::Failed to push after 3 attempts.'
+          exit 1

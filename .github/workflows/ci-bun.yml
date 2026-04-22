@@ -1,0 +1,70 @@
+name: Bun CI
+
+on:
+  workflow_call:
+    inputs:
+      bun-version:
+        description: 'Bun version to install.'
+        required: false
+        type: string
+        default: 'latest'
+      working-directory:
+        description: 'Working directory for monorepo subpackages.'
+        required: false
+        type: string
+        default: '.'
+      install-command:
+        description: 'Command used to install dependencies.'
+        required: false
+        type: string
+        default: 'bun install --frozen-lockfile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install dependencies
+        run: ${{ inputs.install-command }}
+
+      - name: Lint
+        run: |
+          if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
+            bun run lint
+          else
+            echo 'No lint script defined, skipping.'
+          fi
+
+      - name: Build
+        run: |
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            bun run build
+          else
+            echo 'No build script defined, skipping.'
+          fi
+
+      - name: Test
+        run: |
+          if find . -maxdepth 3 \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) -print -quit | grep -q .; then
+            bun test
+          else
+            echo 'No tests found, skipping.'
+          fi

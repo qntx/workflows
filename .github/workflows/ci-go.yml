@@ -1,0 +1,54 @@
+name: Go CI
+
+on:
+  workflow_call:
+    inputs:
+      go-version:
+        description: 'Go version or version spec (stable, 1.22, 1.23.x, etc).'
+        required: false
+        type: string
+        default: 'stable'
+      enable-lint:
+        description: 'Run golangci-lint.'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - name: Tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Lint
+        if: inputs.enable-lint
+        uses: golangci/golangci-lint-action@v9
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -race -v ./...

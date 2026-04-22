@@ -1,0 +1,257 @@
+name: Generate OpenAPI Client
+
+# Unified OpenAPI client generator for all supported languages.
+# Post-generation hooks (go mod tidy, dart build_runner, etc.) run automatically
+# based on the selected generator.
+
+on:
+  workflow_call:
+    inputs:
+      generator:
+        description: 'OpenAPI generator name (go, python, rust, typescript-axios, dart-dio, c, cpp-qt-client).'
+        required: true
+        type: string
+      spec-path:
+        description: 'Path to the OpenAPI specification file (e.g. apis/spec/openapi.yaml).'
+        required: true
+        type: string
+      client-repo:
+        description: 'Target client repository (owner/repo format).'
+        required: true
+        type: string
+      package-name:
+        description: 'Generated package name (e.g. api-client).'
+        required: true
+        type: string
+      template-repo:
+        description: 'Template repository. Defaults to qntx/openapi-<generator>-template.'
+        required: false
+        type: string
+        default: ''
+      template-ref:
+        description: 'Ref (branch, tag, or SHA) of the template repository.'
+        required: false
+        type: string
+        default: 'main'
+      additional-properties:
+        description: 'Extra properties appended to --additional-properties (comma-separated).'
+        required: false
+        type: string
+        default: ''
+      node-version:
+        description: 'Node.js version used to run openapi-generator-cli.'
+        required: false
+        type: string
+        default: 'lts/*'
+      lint-spec:
+        description: 'Lint the OpenAPI specification before generation.'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      PAT_TOKEN:
+        description: 'PAT with write access to the client repository and read access to the template repository.'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gen-openapi-${{ inputs.package-name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Generate ${{ inputs.package-name }} (${{ inputs.generator }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve template repository
+        id: template
+        shell: bash
+        env:
+          GENERATOR: ${{ inputs.generator }}
+          EXPLICIT: ${{ inputs.template-repo }}
+        run: |
+          if [ -n "$EXPLICIT" ]; then
+            repo="$EXPLICIT"
+          else
+            repo="qntx/openapi-$GENERATOR-template"
+          fi
+          slug="${repo##*/}"
+          echo "repo=$repo"   >> "$GITHUB_OUTPUT"
+          echo "slug=$slug"   >> "$GITHUB_OUTPUT"
+
+      - name: Checkout API spec repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Lint OpenAPI spec
+        if: inputs.lint-spec
+        run: npx --yes @redocly/cli lint ${{ inputs.spec-path }}
+
+      - name: Install OpenAPI Generator CLI
+        run: npm install -g @openapitools/openapi-generator-cli
+
+      - name: Install yq
+        uses: mikefarah/yq@master
+        with:
+          cmd: yq --version
+
+      - name: Read spec version
+        id: spec
+        run: echo "version=$(yq e '.info.version' ${{ inputs.spec-path }})" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout template repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.template.outputs.repo }}
+          ref: ${{ inputs.template-ref }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ${{ steps.template.outputs.slug }}
+          persist-credentials: false
+
+      - name: Checkout client repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.client-repo }}
+          token: ${{ secrets.PAT_TOKEN }}
+          path: ${{ inputs.package-name }}-client
+
+      - name: Reset client working tree
+        shell: bash
+        env:
+          CLIENT_DIR: ${{ inputs.package-name }}-client
+          TEMPLATE_DIR: ${{ steps.template.outputs.slug }}
+        run: |
+          set -euo pipefail
+          if [ ! -d "$CLIENT_DIR/.git" ]; then
+            echo "::error::$CLIENT_DIR is not a git repository."
+            exit 1
+          fi
+          # Remove every tracked/untracked entry except .git, then restore the generator ignore file.
+          find "$CLIENT_DIR" -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp "$TEMPLATE_DIR/.openapi-generator-ignore" "$CLIENT_DIR/"
+
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+      - name: Patch template config
+        shell: bash
+        env:
+          CLIENT_REPO: ${{ inputs.client-repo }}
+          CONFIG_FILE: ${{ steps.template.outputs.slug }}/config.yaml
+        run: |
+          owner="${CLIENT_REPO%%/*}"
+          name="${CLIENT_REPO##*/}"
+          {
+            echo "gitHost: github.com"
+            echo "gitUserId: $owner"
+            echo "gitRepoId: $name"
+          } >> "$CONFIG_FILE"
+
+      - name: Resolve additional properties
+        id: props
+        shell: bash
+        env:
+          GENERATOR: ${{ inputs.generator }}
+          PACKAGE: ${{ inputs.package-name }}
+          VERSION: ${{ steps.spec.outputs.version }}
+          CLIENT_REPO: ${{ inputs.client-repo }}
+          EXTRA: ${{ inputs.additional-properties }}
+        run: |
+          case "$GENERATOR" in
+            go)
+              props="packageName=$PACKAGE,packageVersion=$VERSION" ;;
+            python)
+              props="packageName=$PACKAGE,packageVersion=$VERSION,packageUrl=https://github.com/$CLIENT_REPO" ;;
+            rust)
+              props="packageName=$PACKAGE,packageVersion=$VERSION" ;;
+            typescript-axios)
+              props="modelPackage=$PACKAGE,licenseName=MIT,npmName=$PACKAGE,npmVersion=$VERSION,npmRepository=https://github.com/$CLIENT_REPO.git" ;;
+            dart-dio)
+              props="pubVersion=$VERSION,pubDescription='A Dart client for the API.',pubHomepage=https://github.com/$CLIENT_REPO,pubRepository=https://github.com/$CLIENT_REPO,modelPackage=$PACKAGE,pubLibrary=$PACKAGE.api,pubName=$PACKAGE" ;;
+            c)
+              props="" ;;
+            cpp-qt-client)
+              props="packageName=$PACKAGE,cppNamespace=$PACKAGE" ;;
+            *)
+              props="" ;;
+          esac
+          if [ -n "$EXTRA" ]; then
+            if [ -n "$props" ]; then
+              props="$props,$EXTRA"
+            else
+              props="$EXTRA"
+            fi
+          fi
+          echo "value=$props" >> "$GITHUB_OUTPUT"
+
+      - name: Generate OpenAPI client
+        shell: bash
+        env:
+          TEMPLATE_DIR: ${{ steps.template.outputs.slug }}
+          PROPS: ${{ steps.props.outputs.value }}
+        run: |
+          args=(
+            -g "${{ inputs.generator }}"
+            -i "${{ inputs.spec-path }}"
+            -o "${{ inputs.package-name }}-client"
+            -t "./$TEMPLATE_DIR/template"
+            -c "./$TEMPLATE_DIR/config.yaml"
+          )
+          if [ -n "$PROPS" ]; then
+            args+=(--additional-properties="$PROPS")
+          fi
+          openapi-generator-cli generate "${args[@]}"
+
+      - name: Post-generation (Go)
+        if: inputs.generator == 'go'
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
+
+      - name: Post-generation (Go) - go mod tidy
+        if: inputs.generator == 'go'
+        working-directory: ${{ inputs.package-name }}-client
+        run: go mod tidy
+
+      - name: Post-generation (Dart Dio) - setup
+        if: inputs.generator == 'dart-dio'
+        uses: dart-lang/setup-dart@v1
+
+      - name: Post-generation (Dart Dio) - build_runner
+        if: inputs.generator == 'dart-dio'
+        working-directory: ${{ inputs.package-name }}-client
+        run: |
+          dart pub get
+          dart format .
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Clean up generator files
+        working-directory: ${{ inputs.package-name }}-client
+        run: |
+          rm -rf .openapi-generator
+          rm -f .openapi-generator-ignore
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          path: ./${{ inputs.package-name }}-client
+          commit-message: 'chore(${{ inputs.package-name }}): regen client v${{ steps.spec.outputs.version }} on ${{ steps.date.outputs.date }}'
+          title: 'chore(${{ inputs.package-name }}): regen client v${{ steps.spec.outputs.version }} on ${{ steps.date.outputs.date }}'
+          body: |
+            Automated client regeneration based on changes in the API specification.
+            Triggered by commit: `${{ github.sha }}`
+            Run ID: `${{ github.run_id }}`
+          branch: 'chore/bot-${{ inputs.package-name }}-autoupdate-${{ github.run_id }}'
+          delete-branch: true
+          labels: 'automated'
+          token: ${{ secrets.PAT_TOKEN }}

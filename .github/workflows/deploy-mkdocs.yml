@@ -1,13 +1,20 @@
-name: Deploy Documentation
+name: Deploy MkDocs Documentation
 
 on:
   workflow_call:
     inputs:
       python-version:
+        description: 'Python version to use.'
         required: false
         type: string
-        default: '3.x'
+        default: '3.13'
+      requirements-file:
+        description: 'Path to a requirements.txt file. Used when present; otherwise mkdocs-dependencies is installed directly.'
+        required: false
+        type: string
+        default: 'requirements.txt'
       mkdocs-dependencies:
+        description: 'Space-separated package list installed when requirements-file is absent.'
         required: false
         type: string
         default: 'mkdocs-material mkdocstrings mkdocstrings-python mkdocs-minify-plugin'
@@ -15,20 +22,33 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
         with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
           python-version: ${{ inputs.python-version }}
 
       - name: Install MkDocs dependencies
-        run: pip install ${{ inputs.mkdocs-dependencies }}
+        run: |
+          if [ -f "${{ inputs.requirements-file }}" ]; then
+            uv pip install --system -r "${{ inputs.requirements-file }}"
+          else
+            uv pip install --system ${{ inputs.mkdocs-dependencies }}
+          fi
 
       - name: Deploy documentation
         run: mkdocs gh-deploy --force

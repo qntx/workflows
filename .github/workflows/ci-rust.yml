@@ -1,0 +1,59 @@
+name: Rust CI
+
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+        required: false
+        type: string
+        default: 'stable'
+      features:
+        description: 'Cargo feature flags passed to build/test (e.g. --all-features, --no-default-features).'
+        required: false
+        type: string
+        default: '--all-features'
+      submodules:
+        description: 'Enable git submodules checkout.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || '' }}
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets ${{ inputs.features }} -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --verbose ${{ inputs.features }}
+
+      - name: Test
+        run: cargo test --workspace --verbose ${{ inputs.features }}

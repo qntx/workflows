@@ -1,40 +1,52 @@
-name: CD
+name: Release Rust Binary
 
 on:
   workflow_call:
     inputs:
       bin:
-        description: 'Binary name for the CLI executable (e.g. machi, xmtp)'
+        description: 'Binary name for the CLI executable (e.g. machi, xmtp).'
         required: true
         type: string
       package:
-        description: 'Cargo package name to build (passed to cargo build -p)'
+        description: 'Cargo package name to build (passed to cargo build -p).'
         required: true
         type: string
-      cross_packages:
-        description: 'Space-separated apt packages for ARM64 cross-compilation'
+      cross-packages:
+        description: 'Space-separated apt packages for ARM64 cross-compilation.'
         required: false
         type: string
         default: 'gcc-aarch64-linux-gnu'
-      cross_env:
-        description: 'Newline-separated KEY=VALUE env vars appended during cross-compilation'
+      cross-env:
+        description: 'Newline-separated KEY=VALUE env vars appended during cross-compilation.'
         required: false
         type: string
         default: ''
-      cargo_env:
-        description: 'Newline-separated KEY=VALUE global cargo/build env vars'
+      cargo-env:
+        description: 'Newline-separated KEY=VALUE global cargo/build env vars.'
         required: false
         type: string
         default: ''
+      toolchain:
+        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+        required: false
+        type: string
+        default: 'stable'
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -49,30 +61,31 @@ jobs:
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
           - { target: aarch64-pc-windows-msvc, os: windows-latest }
 
-    runs-on: ${{ matrix.os }}
-
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: '${{ matrix.target }}' }
-      - uses: Swatinem/rust-cache@v2
-        with: { key: '${{ matrix.target }}' }
+        with:
+          persist-credentials: false
 
-      # Apply optional global env vars (e.g. CARGO_PROFILE_RELEASE_LTO)
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
       - name: Apply extra env vars
-        if: inputs.cargo_env != ''
+        if: inputs.cargo-env != ''
         shell: bash
         env:
-          EXTRA_ENV: ${{ inputs.cargo_env }}
+          EXTRA_ENV: ${{ inputs.cargo-env }}
         run: echo "$EXTRA_ENV" >> "$GITHUB_ENV"
 
-      # Cross-compile for Linux ARM64 on the x86_64 runner.
-      # The Azure apt mirror lacks arm64 packages (actions/runner-images#10901),
-      # so we add ports.ubuntu.com as a separate deb822 source.
       - name: Setup cross-compilation (Linux ARM64)
         if: matrix.cross
         env:
-          CROSS_ENV: ${{ inputs.cross_env }}
+          CROSS_ENV: ${{ inputs.cross-env }}
         run: |
           sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
           printf '%s\n' \
@@ -85,13 +98,14 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/arm64-cross.sources
           sudo dpkg --add-architecture arm64
           sudo apt-get update
-          sudo apt-get install -y ${{ inputs.cross_packages }}
+          sudo apt-get install -y ${{ inputs.cross-packages }}
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
           if [ -n "$CROSS_ENV" ]; then
             echo "$CROSS_ENV" >> "$GITHUB_ENV"
           fi
 
-      - run: cargo build --release --target ${{ matrix.target }} -p ${{ inputs.package }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p ${{ inputs.package }}
 
       - name: Package
         shell: bash
@@ -104,7 +118,11 @@ jobs:
           exe="$bin"; [[ "$target" == *windows* ]] && exe="$exe.exe"
 
           mkdir "$staging"
-          cp "target/$target/release/$exe" LICENSE-MIT LICENSE-APACHE "$staging/"
+          cp "target/$target/release/$exe" "$staging/"
+          # Copy any LICENSE* and README* files that exist (tolerant to single-license projects).
+          shopt -s nullglob
+          for f in LICENSE* README*; do cp "$f" "$staging/"; done
+          shopt -u nullglob
 
           if [[ "$target" == *windows* ]]; then
             (cd "$staging" && 7z a "../$staging.zip" .)
@@ -114,9 +132,11 @@ jobs:
             asset="$staging.tar.gz"
           fi
 
-          # SHA-256 checksum
-          if command -v sha256sum &>/dev/null; then sha256sum "$asset" > "$asset.sha256"
-          else shasum -a 256 "$asset" > "$asset.sha256"; fi
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "$asset" > "$asset.sha256"
+          else
+            shasum -a 256 "$asset" > "$asset.sha256"
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
@@ -126,20 +146,26 @@ jobs:
             !${{ inputs.bin }}-*/
 
   release:
+    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v6
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/download-artifact@v8
-        with: { merge-multiple: true }
+        with:
+          merge-multiple: true
 
       - name: Generate changelog
         id: cliff
         uses: orhun/git-cliff-action@v4
-        with: { args: '--latest --strip header' }
+        with:
+          args: --latest --strip header
 
       - uses: softprops/action-gh-release@v3
         with:

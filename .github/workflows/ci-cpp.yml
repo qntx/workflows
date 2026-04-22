@@ -1,0 +1,67 @@
+name: C/C++ CI
+
+on:
+  workflow_call:
+    inputs:
+      apt-packages:
+        description: 'Extra apt packages to install (space-separated).'
+        required: false
+        type: string
+        default: ''
+      build-type:
+        description: 'CMake build type (Release, Debug, RelWithDebInfo).'
+        required: false
+        type: string
+        default: 'Release'
+      enable-tests:
+        description: 'Run ctest after build.'
+        required: false
+        type: boolean
+        default: true
+      cmake-args:
+        description: 'Extra arguments passed to cmake configure.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+
+      - name: Configure CMake
+        run: >
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=${{ inputs.build-type }}
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          ${{ inputs.cmake-args }}
+
+      - name: Build
+        run: cmake --build build --config ${{ inputs.build-type }} --parallel
+
+      - name: Test
+        if: inputs.enable-tests
+        working-directory: build
+        run: ctest --output-on-failure --build-config ${{ inputs.build-type }}

@@ -1,0 +1,68 @@
+name: Close Stale Issues and PRs
+
+on:
+  workflow_call:
+    inputs:
+      days-before-issue-stale:
+        description: 'Days of inactivity before an issue is marked stale.'
+        required: false
+        type: number
+        default: 30
+      days-before-pr-stale:
+        description: 'Days of inactivity before a PR is marked stale.'
+        required: false
+        type: number
+        default: 45
+      days-before-issue-close:
+        description: 'Days after stale before an issue is closed.'
+        required: false
+        type: number
+        default: 5
+      days-before-pr-close:
+        description: 'Days after stale before a PR is closed.'
+        required: false
+        type: number
+        default: 10
+      only-labels:
+        description: 'Comma-separated labels required for items to be considered. Empty means no filter.'
+        required: false
+        type: string
+        default: 'awaiting-feedback,awaiting-answers'
+      exempt-labels:
+        description: 'Comma-separated labels that exempt items from being marked stale.'
+        required: false
+        type: string
+        default: 'awaiting-approval,work-in-progress'
+  schedule:
+    - cron: '30 1 * * *'
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale
+  cancel-in-progress: false
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/stale@v10
+        with:
+          stale-issue-message: 'This issue is stale because it has been open ${{ inputs.days-before-issue-stale }} days with no activity. Remove stale label or comment or this will be closed in ${{ inputs.days-before-issue-close }} days.'
+          stale-pr-message: 'This PR is stale because it has been open ${{ inputs.days-before-pr-stale }} days with no activity. Remove stale label or comment or this will be closed in ${{ inputs.days-before-pr-close }} days.'
+          close-issue-message: 'This issue was closed because it has been stalled for ${{ inputs.days-before-issue-close }} days with no activity.'
+          close-pr-message: 'This PR was closed because it has been stalled for ${{ inputs.days-before-pr-close }} days with no activity.'
+          days-before-issue-stale: ${{ inputs.days-before-issue-stale }}
+          days-before-pr-stale: ${{ inputs.days-before-pr-stale }}
+          days-before-issue-close: ${{ inputs.days-before-issue-close }}
+          days-before-pr-close: ${{ inputs.days-before-pr-close }}
+          stale-issue-label: 'no-issue-activity'
+          close-issue-label: 'stale-close'
+          exempt-issue-labels: ${{ inputs.exempt-labels }}
+          stale-pr-label: 'no-pr-activity'
+          close-pr-label: 'stale-close'
+          exempt-pr-labels: ${{ inputs.exempt-labels }}
+          only-labels: ${{ inputs.only-labels }}
