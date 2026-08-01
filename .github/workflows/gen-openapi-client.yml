@@ -88,7 +88,7 @@ jobs:
           echo "slug=$slug"   >> "$GITHUB_OUTPUT"
 
       - name: Checkout API spec repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -121,7 +121,7 @@ jobs:
         run: echo "version=$(yq e '.info.version' ${{ inputs.spec-path }})" >> "$GITHUB_OUTPUT"
 
       - name: Checkout template repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ steps.template.outputs.repo }}
           ref: ${{ inputs.template-ref }}
@@ -130,7 +130,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout client repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.client-repo }}
           token: ${{ secrets.PAT_TOKEN }}
