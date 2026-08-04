@@ -238,7 +238,7 @@ jobs:
 
       - name: Post-generation (Dart Dio) - setup
         if: inputs.generator == 'dart-dio'
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@v1.7.2
 
       - name: Post-generation (Dart Dio) - build_runner
         if: inputs.generator == 'dart-dio'
