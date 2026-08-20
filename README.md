@@ -16,25 +16,25 @@ All workflows are invoked via `workflow_call` and share a common hardening basel
 
 ### CI (continuous integration)
 
-| Workflow         | Purpose                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `ci-bun.yml`     | Bun install/lint/build/test for monorepo-aware Bun projects.                              |
-| `ci-cpp.yml`     | CMake + ccache build with optional ctest, parameterised apt packages.                     |
-| `ci-dart.yml`    | `dart format`/`analyze --fatal-infos`/`test`.                                             |
-| `ci-foundry.yml` | Foundry `fmt --check`/`build --sizes`/`test -vvv` with the `ci` profile.                  |
-| `ci-go.yml`      | `go mod tidy` drift check, `vet`, optional `golangci-lint`, race tests.                   |
-| `ci-node.yml`    | Matrix build across configurable Node.js versions; npm/pnpm/yarn auto-detect.             |
-| `ci-python.yml`  | `uv`-powered install with ruff + pytest; supports `pyproject.toml` or `requirements.txt`. |
-| `ci-rust.yml`    | `fmt`/`clippy -D warnings`/`build`/`test` with `Swatinem/rust-cache`.                     |
+| Workflow         | Purpose                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| `ci-bun.yml`     | Bun install/lint/build/test for monorepo-aware Bun projects.                                   |
+| `ci-cpp.yml`     | CMake + ccache build with optional ctest, parameterised apt packages.                          |
+| `ci-dart.yml`    | `dart format`/`analyze --fatal-infos`/`test`.                                                  |
+| `ci-foundry.yml` | Foundry `fmt --check`/`build --sizes`/`test -vvv` with the `ci` profile.                       |
+| `ci-go.yml`      | `go mod tidy` drift check, `vet`, optional `golangci-lint`, race tests.                        |
+| `ci-node.yml`    | Matrix build across configurable Node.js versions; npm/pnpm/yarn auto-detect.                  |
+| `ci-python.yml`  | `uv`-powered install with ruff + pytest; supports `pyproject.toml` or `requirements.txt`.      |
+| `ci-rust.yml`    | `fmt`/`clippy -D warnings`/`build`/`test` with `Swatinem/rust-cache`. Optional `apt-packages`. |
 
 ### Publish (package registries)
 
-| Workflow              | Purpose                                                                             |
-| --------------------- | ----------------------------------------------------------------------------------- |
-| `publish-npm.yml`     | npm OIDC Trusted Publishing with provenance; falls back to `NPM_TOKEN` if supplied. |
-| `publish-npm-bun.yml` | Same as above but builds and tests with Bun.                                        |
-| `publish-pypi.yml`    | PyPI OIDC Trusted Publishing with attestations via `pypa/gh-action-pypi-publish`.   |
-| `publish-crates.yml`  | `cargo publish` with sparse-index polling (no hard-coded sleep).                    |
+| Workflow              | Purpose                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `publish-npm.yml`     | npm OIDC Trusted Publishing with provenance; falls back to `NPM_TOKEN` if supplied.            |
+| `publish-npm-bun.yml` | Same as above but builds and tests with Bun.                                                   |
+| `publish-pypi.yml`    | PyPI OIDC Trusted Publishing with attestations via `pypa/gh-action-pypi-publish`.              |
+| `publish-crates.yml`  | `cargo publish --locked`. Optional `apt-packages`. Skip already-published versions; retry 429. |
 
 ### Release (GitHub Release + changelog)
 

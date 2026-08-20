@@ -18,6 +18,11 @@ on:
         required: false
         type: boolean
         default: false
+      apt-packages:
+        description: 'Extra apt packages to install (space-separated).'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -38,6 +43,12 @@ jobs:
         with:
           persist-credentials: false
           submodules: ${{ inputs.submodules && 'recursive' || '' }}
+
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - uses: dtolnay/rust-toolchain@master
         with:
