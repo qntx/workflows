@@ -13,6 +13,16 @@ on:
         required: false
         type: string
         default: 'stable'
+      apt-packages:
+        description: 'Extra apt packages to install (space-separated).'
+        required: false
+        type: string
+        default: ''
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
     secrets:
       CARGO_REGISTRY_TOKEN:
         description: 'Cargo registry token for publishing.'
@@ -32,11 +42,17 @@ jobs:
   publish:
     name: Build, Test & Publish
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -60,13 +76,77 @@ jobs:
       - name: Publish to crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PACKAGES: ${{ inputs.packages }}
         run: |
-          if [ -n "${{ inputs.packages }}" ]; then
-            for pkg in ${{ inputs.packages }}; do
-              echo "::group::Publishing $pkg"
-              cargo publish -p "$pkg" --locked
+          set -euo pipefail
+
+          publish_one() {
+            local spec="$1"
+            local attempt=0
+            local max_attempts=12
+            local log status wait_s retry_line when target now
+            local -a args=(--locked)
+
+            if [ -n "$spec" ]; then
+              args=(-p "$spec" --locked)
+            fi
+
+            while [ "$attempt" -lt "$max_attempts" ]; do
+              attempt=$((attempt + 1))
+              log="$(mktemp)"
+              echo "::group::Publishing ${spec:-.} (attempt ${attempt})"
+              set +e
+              cargo publish "${args[@]}" >"$log" 2>&1
+              status=$?
+              set -e
+              cat "$log"
               echo "::endgroup::"
+
+              if [ "$status" -eq 0 ]; then
+                rm -f "$log"
+                return 0
+              fi
+
+              if grep -Eqi 'already exists on crates\.io|already been uploaded|already uploaded' "$log"; then
+                echo "${spec:-.} already on crates.io; skipping"
+                rm -f "$log"
+                return 0
+              fi
+
+              if grep -Fq 'Too Many Requests' "$log"; then
+                wait_s=120
+                retry_line="$(grep -oE 'try again after [^[:space:]].*GMT' "$log" | head -n1 || true)"
+                if [ -n "$retry_line" ]; then
+                  when="${retry_line#try again after }"
+                  target="$(date -u -d "$when" +%s)"
+                  now="$(date -u +%s)"
+                  wait_s=$((target - now + 15))
+                fi
+                if [ "$wait_s" -lt 60 ]; then
+                  wait_s=60
+                fi
+                if [ "$wait_s" -gt 900 ]; then
+                  wait_s=900
+                fi
+                rm -f "$log"
+                echo "crates.io 429 for ${spec:-.}; sleeping ${wait_s}s"
+                sleep "$wait_s"
+                continue
+              fi
+
+              rm -f "$log"
+              echo "::error::cargo publish failed for ${spec:-.}"
+              return 1
+            done
+
+            echo "::error::exhausted retries for ${spec:-.}"
+            return 1
+          }
+
+          if [ -n "$PACKAGES" ]; then
+            for pkg in $PACKAGES; do
+              publish_one "$pkg"
             done
           else
-            cargo publish --locked
+            publish_one ""
           fi
