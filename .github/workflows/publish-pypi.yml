@@ -1,13 +1,27 @@
-name: Publish to PyPI
+name: Publish / PyPI
 
-# Default path: OIDC Trusted Publishing via pypa/gh-action-pypi-publish.
-# Prerequisite: configure a trusted publisher at pypi.org for the project.
-# Fallback: pass PYPI_API_TOKEN secret if trusted publishing is not configured.
-# See: https://docs.pypi.org/trusted-publishers/
+# Non-empty PYPI_TOKEN ⇒ token path, attestations always false; caller need not grant id-token.
+# Empty PYPI_TOKEN ⇒ OIDC path, attestations from input (default true); caller must set
+# id-token: write and attestations: write.
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 15
       python-version:
         description: 'Python version to use for building.'
         required: false
@@ -19,14 +33,23 @@ on:
         type: string
         default: ''
       environment:
-        description: 'GitHub environment name (must match the environment configured for the trusted publisher on pypi.org, if any). Leave empty to skip environment protection.'
+        description: 'GitHub environment name. Empty string skips environment protection.'
         required: false
         type: string
         default: ''
-    secrets:
-      PYPI_API_TOKEN:
-        description: 'Optional PyPI API token fallback if Trusted Publishing is not configured.'
+      attestations:
+        description: 'OIDC path only. Token path always false.'
         required: false
+        type: boolean
+        default: true
+    secrets:
+      PYPI_TOKEN:
+        description: 'Optional. When set, token path is used and attestations are off.'
+        required: false
+    outputs:
+      attestations:
+        description: 'Whether attestations were requested on the OIDC path.'
+        value: ${{ jobs.publish.outputs.attestations }}
 
 permissions:
   contents: read
@@ -34,24 +57,33 @@ permissions:
   attestations: write
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: qntx-workflows-publish-pypi-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Build & Publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Empty string is no environment protection; do not omit the key.
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      attestations: ${{ steps.auth.outputs.mode == 'oidc' && inputs.attestations || false }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
-          enable-cache: true
+          enable-cache: false
           python-version: ${{ inputs.python-version }}
 
       - name: Build package
@@ -59,12 +91,25 @@ jobs:
 
       - name: Check distribution
         run: |
+          set -euo pipefail
           uv pip install --system twine
           twine check dist/*
 
+      - id: auth
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PYPI_TOKEN}" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=oidc" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.PYPI_TOKEN }}
           repository-url: ${{ inputs.repository-url }}
-          attestations: true
+          packages-dir: ${{ inputs.working-directory }}/dist
+          attestations: ${{ steps.auth.outputs.mode == 'oidc' && inputs.attestations || false }}
