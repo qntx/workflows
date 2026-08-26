@@ -1,0 +1,4 @@
+.github/workflows/ @gitctrlx @qntxc
+.github/CODEOWNERS @gitctrlx @qntxc
+.github/dependabot.yml @gitctrlx @qntxc
+actions/ @gitctrlx @qntxc
