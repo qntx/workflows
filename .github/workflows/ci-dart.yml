@@ -24,7 +24,7 @@ on:
         type: number
         default: 20
       dart-version:
-        description: 'Dart SDK channel or version (was input id sdk).'
+        description: 'Dart SDK channel or version.'
         required: false
         type: string
         default: 'stable'

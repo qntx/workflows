@@ -67,11 +67,23 @@ jobs:
           persist-credentials: false
           submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
+      # setup-node cache runs `pnpm store path` / `yarn --version` during restore.
+      - name: Enable Corepack
+        if: ${{ env.PM != 'npm' }}
+        run: |
+          set -euo pipefail
+          corepack enable
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: ${{ inputs.package-manager }}
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/package-lock.json
+            ${{ inputs.working-directory }}/pnpm-lock.yaml
+            ${{ inputs.working-directory }}/yarn.lock
+            ${{ inputs.working-directory }}/npm-shrinkwrap.json
 
       - name: Record toolchain
         run: |
