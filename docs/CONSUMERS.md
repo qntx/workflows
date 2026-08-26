@@ -124,7 +124,9 @@ permissions:
   contents: write
 ```
 
-## Release / Release / Rust
+## Release
+
+`release.yml` and `release-rust.yml`.
 
 ```yaml
 permissions:

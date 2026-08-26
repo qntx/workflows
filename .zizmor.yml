@@ -1,5 +1,3 @@
-# $/ has no @ref; actionlint/zizmor do not treat it as a pin.
-rules:
-  unpinned-uses:
-    ignore:
-      - self-ci.yml
+# Same-repository `$/` has no @ref. zizmor does not report it as unpinned.
+# pinact and actionlint ignore `$/` separately. Do not file-ignore workflows.
+rules: {}

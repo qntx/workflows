@@ -1,6 +1,6 @@
 # Catalogue
 
-Closed public prefixes: `ci-` / `publish-` / `release` / `deploy-` / `ops-`. Private prefix: `self-`. New files add a suffix under an existing prefix; they do not invent a fifth public prefix.
+Closed public prefixes: `ci-` / `publish-` / `release` / `deploy-` / `ops-`. Private prefix: `self-`. New files add a suffix under an existing prefix; they do not invent a new public prefix.
 
 `name:` is `<Layer> / <Subject>`. The only exception is `release.yml` → `Release` (the workflow is the layer).
 
