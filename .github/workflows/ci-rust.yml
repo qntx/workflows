@@ -1,10 +1,30 @@
-name: Rust CI
+name: CI / Rust
 
 on:
   workflow_call:
     inputs:
-      toolchain:
-        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+      runs-on:
+        description: 'Runner label. Debian-like required (apt).'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
+      rust-version:
+        description: 'Rust toolchain channel or version (stable, beta, nightly, or a pinned version).'
         required: false
         type: string
         default: 'stable'
@@ -13,11 +33,6 @@ on:
         required: false
         type: string
         default: '--all-features'
-      submodules:
-        description: 'Enable git submodules checkout.'
-        required: false
-        type: boolean
-        default: false
       apt-packages:
         description: 'Extra apt packages to install (space-separated).'
         required: false
@@ -28,43 +43,65 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-rust-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CARGO_TERM_COLOR: always
+      FEATURES: ${{ inputs.features }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
-          submodules: ${{ inputs.submodules && 'recursive' || '' }}
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
-      - name: Install apt packages
-        if: inputs.apt-packages != ''
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ inputs.apt-packages }}
-
-      - uses: dtolnay/rust-toolchain@master
+      - uses: $/actions/apt-install
         with:
-          toolchain: ${{ inputs.toolchain }}
+          packages: ${{ inputs.apt-packages }}
+
+      - uses: $/actions/setup-rust
+        with:
+          rust-version: ${{ inputs.rust-version }}
           components: rustfmt, clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Rust'
+            echo "- rustc: $(rustc --version)"
+            echo "- cargo: $(cargo --version)"
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Format
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets ${{ inputs.features }} -- -D warnings
+        run: |
+          set -euo pipefail
+          # word-split is intentional
+          # shellcheck disable=SC2086
+          cargo clippy --workspace --all-targets $FEATURES -- -D warnings
 
       - name: Build
-        run: cargo build --workspace --verbose ${{ inputs.features }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional
+          # shellcheck disable=SC2086
+          cargo build --workspace --verbose $FEATURES
 
       - name: Test
-        run: cargo test --workspace --verbose ${{ inputs.features }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional
+          # shellcheck disable=SC2086
+          cargo test --workspace --verbose $FEATURES

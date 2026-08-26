@@ -1,18 +1,33 @@
-name: Python CI
+name: CI / Python
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
       python-version:
         description: 'Python version to use.'
         required: false
         type: string
         default: '3.13'
-      submodules:
-        description: 'Enable git submodules checkout.'
-        required: false
-        type: boolean
-        default: false
       lint-command:
         description: 'Command used to lint the project.'
         required: false
@@ -28,40 +43,61 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-python-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
-          submodules: ${{ inputs.submodules && 'recursive' || '' }}
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
           python-version: ${{ inputs.python-version }}
+          working-directory: ${{ inputs.working-directory }}
 
       - name: Install dependencies
         run: |
           set -euo pipefail
           if [ -f pyproject.toml ]; then
             uv sync --all-extras
-            echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+            echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
           elif [ -f requirements.txt ]; then
             uv pip install --system -r requirements.txt ruff pytest
           else
-            echo "::error::Neither pyproject.toml nor requirements.txt found."
+            echo '::error::Neither pyproject.toml nor requirements.txt found.'
             exit 1
           fi
 
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Python'
+            echo "- python: $(python --version 2>&1 || python3 --version 2>&1)"
+            echo "- uv: $(uv --version)"
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Lint
-        run: ${{ inputs.lint-command }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.lint-command }}
+          working-directory: ${{ inputs.working-directory }}
 
       - name: Test
-        run: ${{ inputs.test-command }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.test-command }}
+          working-directory: ${{ inputs.working-directory }}

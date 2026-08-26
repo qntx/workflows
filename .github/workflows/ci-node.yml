@@ -1,15 +1,35 @@
-name: Node.js CI
+name: CI / Node.js
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
       node-versions:
         description: 'JSON array of Node.js versions to test against.'
         required: false
         type: string
         default: '["20", "22", "24"]'
       package-manager:
-        description: 'Package manager to use (npm, pnpm, yarn).'
+        description: 'Package manager to use (npm, pnpm, yarn). Not auto-detected.'
         required: false
         type: string
         default: 'npm'
@@ -23,43 +43,56 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-node-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: ${{ inputs.fail-fast }}
       matrix:
         node-version: ${{ fromJSON(inputs.node-versions) }}
-
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      PM: ${{ inputs.package-manager }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: ${{ inputs.package-manager }}
 
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Node.js'
+            echo "- node: $(node --version)"
+            echo "- package-manager: $PM"
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Install dependencies
         run: |
           set -euo pipefail
-          case "${{ inputs.package-manager }}" in
-            npm)
-              npm ci
-              ;;
+          case "$PM" in
+            npm) npm ci ;;
             pnpm)
               corepack enable
               pnpm install --frozen-lockfile
               ;;
             yarn)
               corepack enable
-              # yarn >=2 uses --immutable; yarn 1.x uses --frozen-lockfile.
               if yarn --version | grep -q '^1\.'; then
                 yarn install --frozen-lockfile
               else
@@ -67,39 +100,47 @@ jobs:
               fi
               ;;
             *)
-              echo "::error::Unsupported package manager: ${{ inputs.package-manager }}"
+              echo "::error::Unsupported package manager: $PM"
               exit 1
               ;;
           esac
 
       - name: Lint
         run: |
+          set -euo pipefail
           if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
-            ${{ inputs.package-manager }} run lint
+            "$PM" run lint
           else
             echo 'No lint script defined, skipping.'
+            echo '- skipped: lint' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Typecheck
         run: |
+          set -euo pipefail
           if jq -e '.scripts.typecheck' package.json > /dev/null 2>&1; then
-            ${{ inputs.package-manager }} run typecheck
+            "$PM" run typecheck
           else
             echo 'No typecheck script defined, skipping.'
+            echo '- skipped: typecheck' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Build
         run: |
+          set -euo pipefail
           if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
-            ${{ inputs.package-manager }} run build
+            "$PM" run build
           else
             echo 'No build script defined, skipping.'
+            echo '- skipped: build' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Test
         run: |
+          set -euo pipefail
           if jq -e '.scripts.test' package.json > /dev/null 2>&1; then
-            ${{ inputs.package-manager }} test
+            "$PM" test
           else
             echo 'No test script defined, skipping.'
+            echo '- skipped: test' >>"$GITHUB_STEP_SUMMARY"
           fi

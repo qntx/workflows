@@ -1,8 +1,28 @@
-name: Go CI
+name: CI / Go
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
       go-version:
         description: 'Go version or version spec (stable, 1.22, 1.23.x, etc).'
         required: false
@@ -13,30 +33,50 @@ on:
         required: false
         type: boolean
         default: true
+      golangci-lint-version:
+        description: 'golangci-lint version.'
+        required: false
+        type: string
+        default: 'v2'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-go-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ inputs.go-version }}
 
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Go'
+            echo "- go: $(go version)"
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Tidy
         run: |
+          set -euo pipefail
           go mod tidy
           git diff --exit-code go.mod go.sum
 
@@ -45,7 +85,15 @@ jobs:
 
       - name: Lint
         if: inputs.enable-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ inputs.golangci-lint-version }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Skip lint
+        if: ${{ !inputs.enable-lint }}
+        run: |
+          echo '- skipped: golangci-lint' >>"$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: go build -v ./...

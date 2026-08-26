@@ -1,10 +1,30 @@
-name: Dart CI
+name: CI / Dart
 
 on:
   workflow_call:
     inputs:
-      sdk:
-        description: 'Dart SDK channel or exact version (stable, beta, dev, or a version like 3.4.0).'
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
+      dart-version:
+        description: 'Dart SDK channel or version (was input id sdk).'
         required: false
         type: string
         default: 'stable'
@@ -13,21 +33,35 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-dart-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
-      - uses: dart-lang/setup-dart@v1.8.0
+      - uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:
-          sdk: ${{ inputs.sdk }}
+          sdk: ${{ inputs.dart-version }}
+
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Dart'
+            echo "- dart: $(dart --version 2>&1)"
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Install dependencies
         run: dart pub get

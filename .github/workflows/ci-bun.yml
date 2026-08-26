@@ -1,20 +1,35 @@
-name: Bun CI
+name: CI / Bun
 
 on:
   workflow_call:
     inputs:
-      bun-version:
-        description: 'Bun version to install.'
+      runs-on:
+        description: 'Runner label.'
         required: false
         type: string
-        default: 'latest'
+        default: 'ubuntu-latest'
       working-directory:
-        description: 'Working directory for monorepo subpackages.'
+        description: 'Working directory relative to the repository root.'
         required: false
         type: string
         default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
+      bun-version:
+        description: 'Bun version. Not latest.'
+        required: false
+        type: string
+        default: '1.4'
       install-command:
-        description: 'Command used to install dependencies.'
+        description: 'Trusted-caller install command.'
         required: false
         type: string
         default: 'bun install --frozen-lockfile'
@@ -23,58 +38,80 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-bun-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun-version }}
 
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Bun'
+            echo "- bun: $(bun --version)"
+          } >>"$GITHUB_STEP_SUMMARY"
+
       - name: Install dependencies
-        run: ${{ inputs.install-command }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.install-command }}
+          working-directory: ${{ inputs.working-directory }}
 
       - name: Lint
         run: |
+          set -euo pipefail
           if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
             bun run lint
           else
             echo 'No lint script defined, skipping.'
+            echo '- skipped: lint' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Typecheck
         run: |
+          set -euo pipefail
           if jq -e '.scripts.typecheck' package.json > /dev/null 2>&1; then
             bun run typecheck
           else
             echo 'No typecheck script defined, skipping.'
+            echo '- skipped: typecheck' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Build
         run: |
+          set -euo pipefail
           if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
             bun run build
           else
             echo 'No build script defined, skipping.'
+            echo '- skipped: build' >>"$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Test
         run: |
+          set -euo pipefail
           if find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
                \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
                -print -quit | grep -q .; then
             bun test
           else
             echo 'No tests found, skipping.'
+            echo '- skipped: test' >>"$GITHUB_STEP_SUMMARY"
           fi

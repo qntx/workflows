@@ -1,8 +1,28 @@
-name: Foundry CI
+name: CI / Foundry
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
       foundry-version:
         description: 'Foundry toolchain version (stable, nightly, or a commit).'
         required: false
@@ -12,36 +32,47 @@ on:
         description: 'Foundry profile to use (requires a matching [profile.*] section in foundry.toml).'
         required: false
         type: string
-        default: 'default'
+        default: 'ci'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-ci-foundry-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   FOUNDRY_PROFILE: ${{ inputs.foundry-profile }}
 
 jobs:
-  check:
-    name: Foundry project
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
-          submodules: recursive
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
         with:
           version: ${{ inputs.foundry-version }}
 
-      - name: Show Forge version
-        run: forge --version
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          forge --version
+          {
+            echo '## CI / Foundry'
+            echo "- forge: $(forge --version)"
+            echo "- FOUNDRY_PROFILE: $FOUNDRY_PROFILE"
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Run Forge fmt
         run: forge fmt --check
