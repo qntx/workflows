@@ -1,8 +1,13 @@
-name: Deploy to GitHub Pages
+name: Deploy / Pages
 
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
       path:
         description: 'Directory containing the built site to upload.'
         required: false
@@ -12,7 +17,7 @@ on:
         description: 'Bun version to install.'
         required: false
         type: string
-        default: 'latest'
+        default: '1.4'
       install-command:
         description: 'Command used to install dependencies.'
         required: false
@@ -23,6 +28,10 @@ on:
         required: false
         type: string
         default: 'bun run build'
+    outputs:
+      page-url:
+        description: 'GitHub Pages URL. Empty on pull_request.'
+        value: ${{ jobs.deploy.outputs.page-url }}
 
 permissions:
   contents: read
@@ -30,32 +39,37 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: qntx-workflows-deploy-pages-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun-version }}
 
       - name: Install dependencies
-        run: ${{ inputs.install-command }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.install-command }}
 
       - name: Build
-        run: ${{ inputs.build-command }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.build-command }}
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ inputs.path }}
 
@@ -64,10 +78,15 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page-url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

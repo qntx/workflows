@@ -1,4 +1,4 @@
-name: Release Rust Binary
+name: Release / Rust
 
 on:
   workflow_call:
@@ -12,12 +12,12 @@ on:
         required: true
         type: string
       cross-packages:
-        description: 'Space-separated apt packages for ARM64 cross-compilation.'
+        description: 'Whitespace-separated apt packages for ARM64 cross-compilation.'
         required: false
         type: string
         default: 'gcc-aarch64-linux-gnu'
       cross-env:
-        description: 'Newline-separated KEY=VALUE env vars appended during cross-compilation.'
+        description: 'Newline-separated KEY=VALUE env vars applied during cross-compilation.'
         required: false
         type: string
         default: ''
@@ -26,17 +26,24 @@ on:
         required: false
         type: string
         default: ''
-      toolchain:
+      rust-version:
         description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
         required: false
         type: string
         default: 'stable'
+    outputs:
+      release-url:
+        description: 'URL of the created GitHub Release.'
+        value: ${{ jobs.release.outputs.release-url }}
+      tag-name:
+        description: 'Tag name of the release.'
+        value: ${{ jobs.release.outputs.tag-name }}
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -47,77 +54,92 @@ jobs:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
-          - {
-              target: aarch64-unknown-linux-gnu,
-              os: ubuntu-latest,
-              cross: true,
-            }
-          - { target: aarch64-apple-darwin, os: macos-latest }
-          - { target: x86_64-pc-windows-msvc, os: windows-latest }
-          - { target: aarch64-pc-windows-msvc, os: windows-latest }
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: $/actions/setup-rust
         with:
-          toolchain: ${{ inputs.toolchain }}
+          rust-version: ${{ inputs.rust-version }}
           targets: ${{ matrix.target }}
+          cache-key: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Apply cargo-env
+        uses: $/actions/parse-env-block
         with:
-          key: ${{ matrix.target }}
+          block: ${{ inputs.cargo-env }}
 
-      - name: Apply extra env vars
-        if: inputs.cargo-env != ''
-        shell: bash
-        env:
-          EXTRA_ENV: ${{ inputs.cargo-env }}
-        run: echo "$EXTRA_ENV" >> "$GITHUB_ENV"
-
-      - name: Setup cross-compilation (Linux ARM64)
+      - name: Setup ARM64 apt sources
         if: matrix.cross
-        env:
-          CROSS_ENV: ${{ inputs.cross-env }}
-        run: |
-          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-          printf '%s\n' \
-            "Types: deb" \
-            "URIs: http://ports.ubuntu.com/ubuntu-ports/" \
-            "Suites: noble noble-updates noble-security" \
-            "Components: main restricted universe multiverse" \
-            "Architectures: arm64" \
-            "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" \
-            | sudo tee /etc/apt/sources.list.d/arm64-cross.sources
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y ${{ inputs.cross-packages }}
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          if [ -n "$CROSS_ENV" ]; then
-            echo "$CROSS_ENV" >> "$GITHUB_ENV"
-          fi
-
-      - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }} -p ${{ inputs.package }}
-
-      - name: Package
-        shell: bash
         run: |
           set -euo pipefail
-          bin="${{ inputs.bin }}"
+          # noble default sources are amd64-only; arm64 debs come from ubuntu-ports.
+          sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          printf '%s\n' \
+            'Types: deb' \
+            'URIs: http://ports.ubuntu.com/ubuntu-ports/' \
+            'Suites: noble noble-updates noble-security' \
+            'Components: main restricted universe multiverse' \
+            'Architectures: arm64' \
+            'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' \
+            | sudo tee /etc/apt/sources.list.d/arm64-cross.sources
+          sudo dpkg --add-architecture arm64
+
+      - name: Install cross packages
+        if: matrix.cross
+        uses: $/actions/apt-install
+        with:
+          packages: ${{ inputs.cross-packages }}
+
+      - name: Apply cross linker and cross-env
+        if: matrix.cross
+        uses: $/actions/parse-env-block
+        with:
+          block: |
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+            ${{ inputs.cross-env }}
+
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+          PACKAGE: ${{ inputs.package }}
+        run: cargo build --release --locked --target "$TARGET" -p "$PACKAGE"
+
+      - name: Package
+        env:
+          BIN: ${{ inputs.bin }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          bin="$BIN"
           if [[ "$GITHUB_REF_NAME" == v* ]]; then
             ver="${GITHUB_REF_NAME#v}"
           else
-            ver="0.0.0-dev"
+            ver='0.0.0-dev'
           fi
-          target="${{ matrix.target }}"
+          target="$TARGET"
           staging="$bin-$ver-$target"
           exe="$bin"
           [[ "$target" == *windows* ]] && exe="$exe.exe"
@@ -138,45 +160,78 @@ jobs:
           fi
 
           if command -v sha256sum &>/dev/null; then
-            sha256sum "$asset" > "$asset.sha256"
+            sha256sum "$asset" >"$asset.sha256"
           else
-            shasum -a 256 "$asset" > "$asset.sha256"
+            shasum -a 256 "$asset" >"$asset.sha256"
           fi
 
           rm -rf "$staging"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-${{ matrix.target }}
           path: dist/
           if-no-files-found: error
+          retention-days: 7
 
   release:
-    name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    outputs:
+      release-url: ${{ steps.gh-release.outputs.url }}
+      tag-name: ${{ steps.tag.outputs.name }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: $/actions/hardened-checkout
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/download-artifact@v8
+      - name: Resolve tag
+        id: tag
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          echo "name=${REF#refs/tags/}" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           merge-multiple: true
 
+      - name: Resolve asset globs
+        id: assets
+        env:
+          BIN: ${{ inputs.bin }}
+        run: |
+          set -euo pipefail
+          {
+            echo 'files<<EOF'
+            printf '%s\n' "${BIN}-*.tar.gz" "${BIN}-*.zip" "${BIN}-*.sha256"
+            echo 'EOF'
+          } >>"$GITHUB_OUTPUT"
+
       - name: Generate changelog
         id: cliff
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
         with:
           args: --latest --strip header
 
-      - uses: softprops/action-gh-release@v3
+      - name: Create GitHub Release
+        id: gh-release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
           body: ${{ steps.cliff.outputs.content }}
-          files: |
-            ${{ inputs.bin }}-*.tar.gz
-            ${{ inputs.bin }}-*.zip
-            ${{ inputs.bin }}-*.sha256
+          files: ${{ steps.assets.outputs.files }}
+
+      - name: Summarize
+        env:
+          URL: ${{ steps.gh-release.outputs.url }}
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          echo "Released ${TAG}: ${URL}" >>"$GITHUB_STEP_SUMMARY"
