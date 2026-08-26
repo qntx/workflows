@@ -3,7 +3,6 @@ set -euo pipefail
 
 [ -z "${PACKAGES:-}" ] && exit 0
 
-# Allow: letters, digits, +, -, ., :, and whitespace. Reject ; & | $ ` ( ) and ..
 if printf '%s' "$PACKAGES" | grep -Eq '[;&|$`()\\]|\.\.'; then
   echo '::error::apt-install: illegal characters in packages'
   exit 1
