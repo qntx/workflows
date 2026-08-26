@@ -2,26 +2,8 @@ name: Self / CI
 
 on:
   pull_request:
-    paths:
-      - 'actions/**'
-      - '.github/workflows/self-ci.yml'
-      - '.github/actionlint.yaml'
-      - '.pinact.yaml'
-      - '.zizmor.yml'
-      - 'package.json'
-      - 'bun.lock'
-      - 'Justfile'
   push:
     branches: [main]
-    paths:
-      - 'actions/**'
-      - '.github/workflows/self-ci.yml'
-      - '.github/actionlint.yaml'
-      - '.pinact.yaml'
-      - '.zizmor.yml'
-      - 'package.json'
-      - 'bun.lock'
-      - 'Justfile'
 
 permissions:
   contents: read
@@ -60,7 +42,7 @@ jobs:
           install -m 0755 actionlint "$HOME/.local/bin/actionlint"
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
       - name: Run actionlint
-        run: actionlint -color .github/workflows/self-ci.yml
+        run: actionlint -color .github/workflows/*.yml
 
   zizmor:
     runs-on: ubuntu-latest
@@ -87,9 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           zizmor --config .zizmor.yml --min-severity=medium --format=sarif \
-            actions .github/workflows/self-ci.yml >"$RUNNER_TEMP/zizmor.sarif"
+            actions .github/workflows >"$RUNNER_TEMP/zizmor.sarif"
           zizmor --config .zizmor.yml --min-severity=medium \
-            actions .github/workflows/self-ci.yml
+            actions .github/workflows
       - name: Upload zizmor SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
@@ -120,7 +102,7 @@ jobs:
       - name: Run pinact
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: pinact run --check --verify-comment .github/workflows/self-ci.yml actions/*/action.yml
+        run: pinact run --check --verify-comment .github/workflows/*.yml actions/*/action.yml
 
   format:
     runs-on: ubuntu-latest

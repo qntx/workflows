@@ -1,0 +1,17 @@
+# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-rust.yml@<sha>
+    with:
+      rust-version: stable
+      submodules: true

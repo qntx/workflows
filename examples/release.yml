@@ -1,0 +1,13 @@
+# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: qntx/workflows/.github/workflows/release.yml@<sha>

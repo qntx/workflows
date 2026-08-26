@@ -2,132 +2,166 @@
 
 # Workflows
 
-Reusable GitHub Actions workflows distributed across QNTX repositories.
+Reusable GitHub Actions workflows for QuantX repositories.
 
-All workflows are invoked via `workflow_call` and share a common hardening baseline:
+The public contract is only `.github/workflows/*.yml` with `on.workflow_call`. The caller owns `on:` (push, pull_request, tags, schedule). `actions/` is private implementation; do not `uses:` it from other repositories.
 
-- Minimal top-level `permissions` (`contents: read` by default).
-- Explicit `concurrency` groups (CI cancels in-flight runs, CD/Publish/Release/Deploy queue).
-- Explicit `timeout-minutes` on every job.
-- `actions/checkout` runs with `persist-credentials: false` unless a push is required.
-- Third-party actions pinned to major tags and auto-updated by Dependabot.
+Pin `uses:` to a 40-character commit SHA of this repository. A moving major tag does not exist yet; do not invent one.
+
+Hardening in every public workflow:
+
+- Job-level permissions (union at workflow top-level).
+- Third-party `uses:` pinned to `owner/repo@<40-char-sha> # vX.Y.Z`.
+- Same-repository references use `$/` with no `@ref`.
+- `actions/checkout` via `$/actions/hardened-checkout` with `persist-credentials: false` unless the job pushes.
+- Explicit `timeout-minutes` on every concrete job.
+- CI cancels in-flight runs; publish / release / deploy / ops do not.
 
 ## Catalogue
 
-### CI (continuous integration)
+See [docs/CATALOGUE.md](docs/CATALOGUE.md) for `name:`, job ids, and inputs. Permissions: [docs/CONSUMERS.md](docs/CONSUMERS.md). Cutover: [docs/MIGRATION.md](docs/MIGRATION.md). Copy-paste callers: [examples/](examples/).
 
-| Workflow         | Purpose                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `ci-bun.yml`     | Bun install/lint/build/test for monorepo-aware Bun projects.                                   |
-| `ci-cpp.yml`     | CMake + ccache build with optional ctest, parameterised apt packages.                          |
-| `ci-dart.yml`    | `dart format`/`analyze --fatal-infos`/`test`.                                                  |
-| `ci-foundry.yml` | Foundry `fmt --check`/`build --sizes`/`test -vvv` with the `ci` profile.                       |
-| `ci-go.yml`      | `go mod tidy` drift check, `vet`, optional `golangci-lint`, race tests.                        |
-| `ci-node.yml`    | Matrix build across configurable Node.js versions; npm/pnpm/yarn auto-detect.                  |
-| `ci-python.yml`  | `uv`-powered install with ruff + pytest; supports `pyproject.toml` or `requirements.txt`.      |
-| `ci-rust.yml`    | `fmt`/`clippy -D warnings`/`build`/`test` with `Swatinem/rust-cache`. Optional `apt-packages`. |
+### CI
 
-### Publish (package registries)
+| Workflow         | Purpose                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `ci-bun.yml`     | Bun install / lint / typecheck / build / test. `bun-version` default `1.4`, not `latest`. |
+| `ci-cpp.yml`     | CMake + ccache, optional ctest, apt packages. Debian-like runner.                         |
+| `ci-dart.yml`    | `dart format` / `analyze --fatal-infos` / `test`.                                         |
+| `ci-foundry.yml` | Forge `fmt --check` / `build --sizes` / `test -vvv`. Profile default `ci`.                |
+| `ci-go.yml`      | `go mod tidy` drift check, `vet`, optional golangci-lint, race tests.                     |
+| `ci-node.yml`    | Matrix across Node versions. `package-manager` is `npm` / `pnpm` / `yarn`, not detected.  |
+| `ci-python.yml`  | uv install, ruff + pytest. `pyproject.toml` or `requirements.txt`.                        |
+| `ci-rust.yml`    | `fmt` / `clippy -D warnings` / `build` / `test`. Optional apt. Debian-like runner.        |
 
-| Workflow              | Purpose                                                                                        |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| `publish-npm.yml`     | npm OIDC Trusted Publishing with provenance; falls back to `NPM_TOKEN` if supplied.            |
-| `publish-npm-bun.yml` | Same as above but builds and tests with Bun.                                                   |
-| `publish-pypi.yml`    | PyPI OIDC Trusted Publishing with attestations via `pypa/gh-action-pypi-publish`.              |
-| `publish-crates.yml`  | `cargo publish --locked`. Optional `apt-packages`. Skip already-published versions; retry 429. |
+CI job id is `ci`. Version inputs are `{tool}-version` (`rust-version`, `dart-version`, `node-version`, …). `submodules` defaults to `false`. Foundry repos with `lib/` as a git submodule must pass `submodules: true`.
 
-### Release (GitHub Release + changelog)
+### Publish
 
-| Workflow           | Purpose                                                                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `release.yml`      | Generic tag → GitHub Release with `git-cliff` changelog. Optional asset upload via `files` glob or `download-artifacts`. Suitable for any repository.   |
-| `release-rust.yml` | Cross-platform Rust binary matrix (Linux x86_64/arm64, macOS arm64, Windows x86_64/arm64) with `git-cliff` changelog and `softprops/action-gh-release`. |
+| Workflow                | Purpose                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `publish-npm.yml`       | npm / pnpm / yarn / bun. Empty `NPM_TOKEN` → OIDC + `--provenance`. Token path never provenance. |
+| `publish-pypi.yml`      | Empty `PYPI_TOKEN` → OIDC + attestations. Token path never attestations.                         |
+| `publish-crates.yml`    | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.            |
+| `publish-container.yml` | Dual-arch OCI push, SBOM, provenance. `attest` default `true`.                                   |
 
-### Deploy (hosted sites)
+Publish job id is `publish`. `publish-container.yml` splits mutually exclusive `build` (`push: false`) and `publish` (`push: true`) jobs.
 
-| Workflow            | Purpose                                                                      |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `deploy-pages.yml`  | Bun build + `actions/deploy-pages` for SPA/static sites. PR runs build only. |
-| `deploy-mkdocs.yml` | `uv`-installed MkDocs deployed via `mkdocs gh-deploy --force`.               |
+### Release
 
-### Containers
+| Workflow           | Purpose                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| `release.yml`      | Tag → GitHub Release with git-cliff. Optional asset glob / artifact download.                      |
+| `release-rust.yml` | Five-target binary matrix, then GitHub Release. `jobs.build.name` is `Build ${{ matrix.target }}`. |
 
-| Workflow              | Purpose                                                                                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `container-build.yml` | Multi-arch (linux/amd64, linux/arm64) OCI build with SBOM, provenance, and `actions/attest-build-provenance`. Auto-detects `Dockerfile` or `Containerfile`. |
+### Deploy
 
-### Code generation
+| Workflow            | Purpose                                                                 |
+| ------------------- | ----------------------------------------------------------------------- |
+| `deploy-pages.yml`  | Bun build + `actions/deploy-pages`. Pull requests run `build` only.     |
+| `deploy-mkdocs.yml` | uv-installed MkDocs via `mkdocs gh-deploy --force` (pushes `gh-pages`). |
 
-| Workflow                 | Purpose                                                                                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gen-openapi-client.yml` | Unified OpenAPI client generator. Select via `generator` input (`go`, `python`, `rust`, `typescript-axios`, `dart-dio`, `c`, `cpp-qt-client`). |
+### Ops
 
-### Repository tooling
+| Workflow        | Purpose                                                            |
+| --------------- | ------------------------------------------------------------------ |
+| `ops-stale.yml` | `actions/stale`. `workflow_call` only; the caller owns `schedule`. |
+| `ops-sync.yml`  | Mirror a folder from another repository. Secret `SYNC_TOKEN`.      |
 
-| Workflow               | Purpose                                                              |
-| ---------------------- | -------------------------------------------------------------------- |
-| `repo-stale.yml`       | Closes stale issues/PRs via `actions/stale`.                         |
-| `repo-sync-folder.yml` | Mirrors a folder from another repository with protected-path guards. |
+### This repository only
+
+Do not `uses:` these from other repositories.
+
+| Workflow           | Purpose                                               |
+| ------------------ | ----------------------------------------------------- |
+| `self-ci.yml`      | actionlint, zizmor, pinact, format, composite tests.  |
+| `self-release.yml` | Annotated `v*.*.*` tags → `release.yml`.              |
+| `self-stale.yml`   | This repository's stale cron.                         |
+| `self-retag.yml`   | Force-move `v<major>` onto an existing immutable tag. |
 
 ## Usage
 
-Invoke a workflow from any consumer repository via `uses:`:
-
-```yaml
-jobs:
-  ci:
-    uses: qntx/workflows/.github/workflows/ci-node.yml@main
-    with:
-      node-versions: '["22", "24"]'
-```
-
-```yaml
-jobs:
-  deploy:
-    uses: qntx/workflows/.github/workflows/deploy-pages.yml@main
-    with:
-      path: dist
-```
-
-```yaml
-jobs:
-  publish:
-    uses: qntx/workflows/.github/workflows/publish-npm.yml@main
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # optional, OIDC is used when omitted
-```
-
-```yaml
-jobs:
-  regen-go:
-    uses: qntx/workflows/.github/workflows/gen-openapi-client.yml@main
-    with:
-      generator: go
-      spec-path: apis/spec/openapi.yaml
-      client-repo: qntx/my-api-go
-      package-name: my-api
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-```
-
-A generic tag-triggered release (works for docs, libraries, contracts, anything):
+Replace `<sha>` with a 40-character commit from this repository.
 
 ```yaml
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-node.yml@<sha>
+    with:
+      node-versions: '["22", "24"]'
+      package-manager: npm
+```
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-foundry.yml@<sha>
+    with:
+      submodules: true
+      # foundry-profile defaults to ci; set default if foundry.toml has no [profile.ci].
+```
+
+```yaml
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@<sha>
+```
+
+```yaml
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
 
 jobs:
   release:
-    uses: qntx/workflows/.github/workflows/release.yml@main
-    # Optional: attach build outputs to the release.
-    # with:
-    #   files: |
-    #     dist/*.tar.gz
-    #     dist/*.whl
+    uses: qntx/workflows/.github/workflows/release.yml@<sha>
 ```
 
-See each workflow's `inputs:` and `secrets:` blocks for the full parameter list.
+```yaml
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    uses: qntx/workflows/.github/workflows/deploy-pages.yml@<sha>
+    with:
+      path: dist
+```
+
+Caller job permissions are intersected with the callee. Token-only npm/PyPI does not need `id-token`. OIDC publish and Pages deploy do. Exact blocks: [docs/CONSUMERS.md](docs/CONSUMERS.md).
 
 ## License
 
