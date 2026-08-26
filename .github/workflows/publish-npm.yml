@@ -101,6 +101,8 @@ jobs:
           node-version: ${{ inputs.node-version }}
           registry-url: ${{ inputs.registry-url }}
           cache: ${{ inputs.package-manager == 'npm' && 'npm' || '' }}
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          package-manager-cache: false
 
       - name: Install dependencies
         env:
