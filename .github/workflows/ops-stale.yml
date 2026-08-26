@@ -1,4 +1,4 @@
-name: Close Stale Issues and PRs
+name: Ops / Stale
 
 on:
   workflow_call:
@@ -33,23 +33,24 @@ on:
         required: false
         type: string
         default: 'awaiting-approval,work-in-progress'
-  schedule:
-    - cron: '30 1 * * *'
 
 permissions:
   issues: write
   pull-requests: write
 
 concurrency:
-  group: stale
+  group: qntx-workflows-ops-stale-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   stale:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
     steps:
-      - uses: actions/stale@v11
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
         with:
           stale-issue-message: 'This issue is stale because it has been open ${{ inputs.days-before-issue-stale }} days with no activity. Remove stale label or comment or this will be closed in ${{ inputs.days-before-issue-close }} days.'
           stale-pr-message: 'This PR is stale because it has been open ${{ inputs.days-before-pr-stale }} days with no activity. Remove stale label or comment or this will be closed in ${{ inputs.days-before-pr-close }} days.'

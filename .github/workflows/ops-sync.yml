@@ -1,0 +1,157 @@
+name: Ops / Sync
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 15
+      source-repo:
+        description: 'Source repository (owner/repo format).'
+        required: true
+        type: string
+      source-branch:
+        description: 'Source repository branch.'
+        required: false
+        type: string
+        default: 'main'
+      source-folder:
+        description: 'Folder path in source repository to sync from.'
+        required: true
+        type: string
+      target-folder:
+        description: 'Target folder path in current repository (default repo root).'
+        required: false
+        type: string
+        default: '.'
+      commit-message:
+        description: 'Commit message for the sync.'
+        required: false
+        type: string
+        default: 'chore: sync files from remote repository'
+      git-user-name:
+        description: 'Git user name for the commit.'
+        required: false
+        type: string
+        default: 'github-actions[bot]'
+      git-user-email:
+        description: 'Git user email for the commit.'
+        required: false
+        type: string
+        default: 'github-actions[bot]@users.noreply.github.com'
+    secrets:
+      SYNC_TOKEN:
+        description: 'Token for checkout and push. Defaults to github.token. Use a PAT for cross-repo private access.'
+        required: false
+    outputs:
+      committed:
+        description: 'true if a commit was pushed'
+        value: ${{ jobs.sync.outputs.committed }}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qntx-workflows-ops-sync-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: write
+    outputs:
+      committed: ${{ steps.push.outputs.committed || 'false' }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: true
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - uses: $/actions/hardened-checkout
+        with:
+          repository: ${{ inputs.source-repo }}
+          ref: ${{ inputs.source-branch }}
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+          path: _source_repo
+          sparse-checkout: ${{ inputs.source-folder }}
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Guard sync paths
+        id: guard
+        uses: $/actions/protect-sync-path
+        with:
+          source: ${{ inputs.source-folder }}
+          destination: ${{ inputs.target-folder }}
+
+      - name: Sync files
+        shell: bash
+        env:
+          SRC_REL: ${{ inputs.source-folder }}
+          DST: ${{ steps.guard.outputs.destination-abs }}
+          ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          src="_source_repo/${SRC_REL}"
+          if [ ! -d "$src" ]; then
+            echo "::error::source folder does not exist after checkout: ${SRC_REL}"
+            exit 1
+          fi
+
+          root="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$ROOT")"
+          if [ "$DST" = "$root" ]; then
+            rsync -a --exclude='.git' --exclude='_source_repo' "$src"/ ./
+          else
+            mkdir -p "$DST"
+            rsync -a --delete "$src"/ "$DST"/
+          fi
+
+          rm -rf _source_repo
+
+      - name: Check for changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'has_changes=false' >>"$GITHUB_OUTPUT"
+            echo 'No changes detected.'
+          else
+            echo 'has_changes=true' >>"$GITHUB_OUTPUT"
+            echo 'Changes detected:'
+            git diff --cached --stat
+          fi
+
+      - name: Commit and push
+        id: push
+        if: steps.changes.outputs.has_changes == 'true'
+        shell: bash
+        env:
+          GIT_USER_NAME: ${{ inputs.git-user-name }}
+          GIT_USER_EMAIL: ${{ inputs.git-user-email }}
+          COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        run: |
+          set -euo pipefail
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+          git commit -m "$COMMIT_MESSAGE"
+          for i in 1 2 3; do
+            if git push; then
+              echo 'committed=true' >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Push attempt $i failed, rebasing..."
+            git pull --rebase
+          done
+          echo '::error::Failed to push after 3 attempts.'
+          exit 1

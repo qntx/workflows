@@ -1,14 +1,15 @@
-name: Self Release
+name: Self / Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['v*.*.*']
 
 permissions:
   contents: read
 
 jobs:
   release:
+    if: github.ref_type == 'tag' && contains(github.ref_name, '.')
     permissions:
       contents: write
-    uses: ./.github/workflows/release.yml
+    uses: $/.github/workflows/release.yml

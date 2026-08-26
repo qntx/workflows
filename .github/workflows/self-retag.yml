@@ -1,0 +1,67 @@
+name: Self / Retag
+
+on:
+  workflow_dispatch:
+    inputs:
+      major:
+        description: 'Major digit to move (e.g. 2). Writes tag v<major>.'
+        required: true
+        type: string
+      target:
+        description: 'Existing immutable tag to point at (e.g. v2.0.0).'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qntx-workflows-self-retag-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Move major tag
+        shell: bash
+        env:
+          MAJOR: ${{ inputs.major }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]]; then
+            echo "::error::major must match ^[0-9]+$ (got ${MAJOR})"
+            exit 1
+          fi
+          if ! [[ "$TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::target must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (got ${TARGET})"
+            exit 1
+          fi
+
+          # Dispatch ref may not contain every tag.
+          git fetch origin --tags --force
+
+          if ! git rev-parse --verify --quiet "refs/tags/${TARGET}"; then
+            echo "::error::target tag ${TARGET} does not exist"
+            exit 1
+          fi
+
+          objtype="$(git cat-file -t "refs/tags/${TARGET}")"
+          if [ "$objtype" != tag ]; then
+            echo "::error::target ${TARGET} must be an annotated tag (got ${objtype})"
+            exit 1
+          fi
+
+          target_peeled="$(git rev-parse "${TARGET}^{commit}")"
+          git tag -f "v${MAJOR}" "$target_peeled"
+          git push -f origin "v${MAJOR}"
