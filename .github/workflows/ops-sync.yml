@@ -82,7 +82,8 @@ jobs:
           ref: ${{ inputs.source-branch }}
           token: ${{ secrets.SYNC_TOKEN || github.token }}
           path: _source_repo
-          sparse-checkout: ${{ inputs.source-folder }}
+          # Non-cone sparse-checkout of '.' materializes an empty tree.
+          sparse-checkout: ${{ inputs.source-folder != '.' && inputs.source-folder || '' }}
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -101,9 +102,17 @@ jobs:
           ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          src="_source_repo/${SRC_REL}"
-          if [ ! -d "$src" ]; then
+          src_rel="_source_repo/${SRC_REL}"
+          if [ ! -d "$src_rel" ]; then
             echo "::error::source folder does not exist after checkout: ${SRC_REL}"
+            exit 1
+          fi
+
+          # Follow symlinks; copy source must stay under the source checkout.
+          source_root="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' '_source_repo')"
+          src="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$src_rel")"
+          if [ "$src" != "$source_root" ] && [[ "$src" != "$source_root/"* ]]; then
+            echo '::error::source folder resolves outside the source checkout'
             exit 1
           fi
 
