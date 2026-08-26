@@ -1,4 +1,4 @@
-# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+# Caller owns on:. Pin at @v2.
 name: Stale
 
 on:
@@ -12,4 +12,4 @@ permissions:
 
 jobs:
   stale:
-    uses: qntx/workflows/.github/workflows/ops-stale.yml@<sha>
+    uses: qntx/workflows/.github/workflows/ops-stale.yml@v2

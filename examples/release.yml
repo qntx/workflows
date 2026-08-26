@@ -1,4 +1,4 @@
-# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+# Caller owns on:. Pin at @v2.0.0.
 name: Release
 
 on:
@@ -10,4 +10,4 @@ permissions:
 
 jobs:
   release:
-    uses: qntx/workflows/.github/workflows/release.yml@<sha>
+    uses: qntx/workflows/.github/workflows/release.yml@v2.0.0

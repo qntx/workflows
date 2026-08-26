@@ -6,7 +6,7 @@ Reusable GitHub Actions workflows for QuantX repositories.
 
 The public contract is only `.github/workflows/*.yml` with `on.workflow_call`. The caller owns `on:` (push, pull_request, tags, schedule). `actions/` is private implementation; do not `uses:` it from other repositories.
 
-Pin `uses:` to a 40-character commit SHA of this repository. A moving major tag does not exist yet; do not invent one.
+Pin CI and ops `uses:` at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
 
 Hardening in every public workflow:
 
@@ -81,7 +81,7 @@ Do not `uses:` these from other repositories.
 
 ## Usage
 
-Replace `<sha>` with a 40-character commit from this repository.
+Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
 
 ```yaml
 on:
@@ -94,7 +94,7 @@ permissions:
 
 jobs:
   ci:
-    uses: qntx/workflows/.github/workflows/ci-node.yml@<sha>
+    uses: qntx/workflows/.github/workflows/ci-node.yml@v2
     with:
       node-versions: '["22", "24"]'
       package-manager: npm
@@ -111,7 +111,7 @@ permissions:
 
 jobs:
   ci:
-    uses: qntx/workflows/.github/workflows/ci-foundry.yml@<sha>
+    uses: qntx/workflows/.github/workflows/ci-foundry.yml@v2
     with:
       submodules: true
       # foundry-profile defaults to ci; set default if foundry.toml has no [profile.ci].
@@ -128,7 +128,7 @@ permissions:
 
 jobs:
   publish:
-    uses: qntx/workflows/.github/workflows/publish-npm.yml@<sha>
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
 ```
 
 ```yaml
@@ -141,7 +141,7 @@ permissions:
 
 jobs:
   release:
-    uses: qntx/workflows/.github/workflows/release.yml@<sha>
+    uses: qntx/workflows/.github/workflows/release.yml@v2.0.0
 ```
 
 ```yaml
@@ -156,7 +156,7 @@ permissions:
 
 jobs:
   deploy:
-    uses: qntx/workflows/.github/workflows/deploy-pages.yml@<sha>
+    uses: qntx/workflows/.github/workflows/deploy-pages.yml@v2.0.0
     with:
       path: dist
 ```

@@ -1,4 +1,4 @@
-# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+# Caller owns on:. Pin at @v2.0.0.
 name: Publish
 
 on:
@@ -10,6 +10,6 @@ permissions:
 
 jobs:
   publish:
-    uses: qntx/workflows/.github/workflows/publish-crates.yml@<sha>
+    uses: qntx/workflows/.github/workflows/publish-crates.yml@v2.0.0
     secrets:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Breaking rewrite of the reusable workflow platform. No compatibility shims. Old filenames are deleted. Pin consumers at a commit SHA until an immutable `vX.Y.Z` tag exists.
+Breaking rewrite of the reusable workflow platform. No compatibility shims. Old filenames are deleted. Ops cuts annotated `v2.0.0` and retags `v2`. Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
 
 ### Removed
 

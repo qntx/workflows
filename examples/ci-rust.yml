@@ -1,4 +1,4 @@
-# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+# Caller owns on:. Pin at @v2.
 name: CI
 
 on:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ci:
-    uses: qntx/workflows/.github/workflows/ci-rust.yml@<sha>
+    uses: qntx/workflows/.github/workflows/ci-rust.yml@v2
     with:
       rust-version: stable
       submodules: true

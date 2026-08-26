@@ -2,12 +2,12 @@
 
 The caller owns `on:`. Callees only declare `workflow_call` inputs, secrets, and outputs.
 
-Pin `uses:` to a 40-character commit SHA of `qntx/workflows` until an immutable `vX.Y.Z` tag exists.
+Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
 
 ```yaml
 jobs:
   ci:
-    uses: qntx/workflows/.github/workflows/ci-rust.yml@<sha>
+    uses: qntx/workflows/.github/workflows/ci-rust.yml@v2
 ```
 
 GitHub intersects caller job `permissions` with the callee. Org `default_workflow_permissions: write` does **not** include `id-token` or `attestations`. OIDC and provenance require those keys on the caller job.

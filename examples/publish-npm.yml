@@ -1,4 +1,4 @@
-# Caller owns on:. Replace <sha> with a 40-character commit of qntx/workflows.
+# Caller owns on:. Pin at @v2.0.0.
 # OIDC path (no NPM_TOKEN). Token-only callers drop id-token and pass NPM_TOKEN.
 name: Publish
 
@@ -12,6 +12,6 @@ permissions:
 
 jobs:
   publish:
-    uses: qntx/workflows/.github/workflows/publish-npm.yml@<sha>
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
     with:
       package-manager: npm
