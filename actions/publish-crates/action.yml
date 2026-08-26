@@ -1,0 +1,14 @@
+name: publish-crates
+description: Publish crates.io packages with already-uploaded skip and 429 backoff.
+inputs:
+  packages:
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN }}
+      run: bash "$GITHUB_ACTION_PATH/publish.sh"

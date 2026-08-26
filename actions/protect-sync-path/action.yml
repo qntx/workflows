@@ -1,0 +1,25 @@
+name: protect-sync-path
+description: Reject sync paths that escape the worktree or overwrite .git/.github.
+inputs:
+  root:
+    required: false
+    default: ''
+  source:
+    required: true
+  destination:
+    required: true
+outputs:
+  source-abs:
+    value: ${{ steps.guard.outputs.source-abs }}
+  destination-abs:
+    value: ${{ steps.guard.outputs.destination-abs }}
+runs:
+  using: composite
+  steps:
+    - id: guard
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        SRC: ${{ inputs.source }}
+        DST: ${{ inputs.destination }}
+      run: bash "$GITHUB_ACTION_PATH/protect.sh"

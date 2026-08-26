@@ -1,0 +1,6 @@
+# run-trusted-command: inline ignore on that action's command sink.
+# $/ has no @ref; actionlint/zizmor do not treat it as a pin.
+rules:
+  unpinned-uses:
+    ignore:
+      - self-ci.yml

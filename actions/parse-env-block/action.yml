@@ -1,0 +1,13 @@
+name: parse-env-block
+description: Write allowlisted KEY=VALUE lines from a block into GITHUB_ENV.
+inputs:
+  block:
+    description: 'Newline-separated KEY=VALUE. Written to GITHUB_ENV after allowlist.'
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        BLOCK: ${{ inputs.block }}
+      run: bash "$GITHUB_ACTION_PATH/parse.sh"

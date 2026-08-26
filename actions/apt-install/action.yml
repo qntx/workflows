@@ -1,0 +1,14 @@
+name: apt-install
+description: Install apt packages on a Debian-like runner.
+inputs:
+  packages:
+    description: 'Whitespace-separated apt package specs. Empty = no-op. Arch qualifiers allowed (libssl-dev:arm64).'
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"

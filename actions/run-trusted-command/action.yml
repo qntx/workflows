@@ -1,0 +1,16 @@
+name: run-trusted-command
+description: Run a caller-supplied command via env, not template expansion in run.
+inputs:
+  command:
+    required: true
+  working-directory:
+    required: false
+    default: '.'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CMD: ${{ inputs.command }}
+      run: bash -c "$CMD" # zizmor: ignore[template-injection]

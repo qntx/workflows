@@ -1,0 +1,5 @@
+# actionlint 1.7.12 does not parse uses: $/ (rhysd/actionlint#711).
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - 'specifying action "\$/[^"]*" in invalid format because ref is missing'

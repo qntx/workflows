@@ -1,0 +1,119 @@
+name: hardened-checkout
+description: Pin-safe checkout with persist-credentials default false.
+inputs:
+  persist-credentials:
+    required: false
+    default: 'false'
+  submodules:
+    required: false
+    default: 'false'
+  fetch-depth:
+    required: false
+    default: '1'
+  token:
+    required: false
+    default: ${{ github.token }}
+  repository:
+    required: false
+    default: ''
+  ref:
+    required: false
+    default: ''
+  path:
+    required: false
+    default: ''
+  sparse-checkout:
+    required: false
+    default: ''
+  sparse-checkout-cone-mode:
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    # Empty ref/path/sparse-checkout must not be forwarded: checkout treats a
+    # missing key as "event default", but an empty string is not always the same.
+    - if: ${{ inputs.ref == '' && inputs.path == '' && inputs.sparse-checkout == '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref != '' && inputs.path == '' && inputs.sparse-checkout == '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        ref: ${{ inputs.ref }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref == '' && inputs.path != '' && inputs.sparse-checkout == '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        path: ${{ inputs.path }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref != '' && inputs.path != '' && inputs.sparse-checkout == '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        ref: ${{ inputs.ref }}
+        path: ${{ inputs.path }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref == '' && inputs.path == '' && inputs.sparse-checkout != '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref != '' && inputs.path == '' && inputs.sparse-checkout != '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        ref: ${{ inputs.ref }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref == '' && inputs.path != '' && inputs.sparse-checkout != '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        path: ${{ inputs.path }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+    - if: ${{ inputs.ref != '' && inputs.path != '' && inputs.sparse-checkout != '' }}
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: ${{ inputs.persist-credentials }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        token: ${{ inputs.token }}
+        repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
+        ref: ${{ inputs.ref }}
+        path: ${{ inputs.path }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}

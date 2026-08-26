@@ -1,0 +1,196 @@
+name: Self / CI
+
+on:
+  pull_request:
+    paths:
+      - 'actions/**'
+      - '.github/workflows/self-ci.yml'
+      - '.github/actionlint.yaml'
+      - '.pinact.yaml'
+      - '.zizmor.yml'
+      - 'package.json'
+      - 'bun.lock'
+      - 'Justfile'
+  push:
+    branches: [main]
+    paths:
+      - 'actions/**'
+      - '.github/workflows/self-ci.yml'
+      - '.github/actionlint.yaml'
+      - '.pinact.yaml'
+      - '.zizmor.yml'
+      - 'package.json'
+      - 'bun.lock'
+      - 'Justfile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qntx-workflows-self-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONLINT_VERSION: '1.7.12'
+  ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+  ZIZMOR_VERSION: '1.29.0'
+  ZIZMOR_SHA256: 'dd96df044a6e8538d5f423790f453bdd03d49e5b2bcc38214acc41a2f1297839'
+  PINACT_VERSION: '4.1.1'
+  PINACT_SHA256: 'd1cffebe5704b74e2e5f8a864efb9f7e54768972dc686188c008033fb1797841'
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c
+          tar -xzf actionlint.tar.gz actionlint
+          install -m 0755 actionlint "$HOME/.local/bin/actionlint"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+      - name: Run actionlint
+        run: actionlint -color .github/workflows/self-ci.yml
+
+  zizmor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: $/actions/hardened-checkout
+      - name: Install zizmor
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          curl -fsSL -o zizmor.tar.gz \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ZIZMOR_SHA256}  zizmor.tar.gz" | sha256sum -c
+          tar -xzf zizmor.tar.gz
+          install -m 0755 zizmor "$HOME/.local/bin/zizmor"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+      - name: Run zizmor
+        run: |
+          set -euo pipefail
+          zizmor --config .zizmor.yml --min-severity=medium --format=sarif \
+            actions .github/workflows/self-ci.yml >"$RUNNER_TEMP/zizmor.sarif"
+          zizmor --config .zizmor.yml --min-severity=medium \
+            actions .github/workflows/self-ci.yml
+      - name: Upload zizmor SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: ${{ runner.temp }}/zizmor.sarif
+          category: zizmor
+
+  pinact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+      - name: Install pinact
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          curl -fsSL -o pinact.tar.gz \
+            "https://github.com/suzuki-shunsuke/pinact/releases/download/v${PINACT_VERSION}/pinact_linux_amd64.tar.gz"
+          echo "${PINACT_SHA256}  pinact.tar.gz" | sha256sum -c
+          tar -xzf pinact.tar.gz
+          install -m 0755 pinact "$HOME/.local/bin/pinact"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+      - name: Run pinact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pinact run --check --verify-comment .github/workflows/self-ci.yml actions/*/action.yml
+
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Install and check
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run format:check
+          bun run markdownlint
+
+  composites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+      - name: Test composites
+        run: |
+          set -euo pipefail
+          bash actions/protect-sync-path/test.sh
+          bash actions/parse-env-block/test.sh
+          bash actions/apt-install/test.sh
+
+  scorecard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+      - name: Upload Scorecard SARIF
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: results.sarif
+          category: scorecard
+
+  ci:
+    name: Self / CI
+    if: always()
+    needs: [actionlint, zizmor, pinact, format, composites]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require all lint jobs
+        if: >-
+          ${{ needs.actionlint.result != 'success'
+          || needs.zizmor.result != 'success'
+          || needs.pinact.result != 'success'
+          || needs.format.result != 'success'
+          || needs.composites.result != 'success' }}
+        run: |
+          echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
+          exit 1

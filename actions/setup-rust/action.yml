@@ -1,0 +1,26 @@
+name: setup-rust
+description: Install a Rust toolchain and cache cargo artifacts.
+inputs:
+  rust-version:
+    required: false
+    default: 'stable'
+  components:
+    required: false
+    default: 'rustfmt, clippy'
+  targets:
+    required: false
+    default: ''
+  cache-key:
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      with:
+        toolchain: ${{ inputs.rust-version }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      with:
+        key: ${{ inputs.cache-key }}
