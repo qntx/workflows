@@ -111,7 +111,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: ${{ inputs.registry-url }}
-          cache: ${{ inputs.package-manager == 'bun' && '' || inputs.package-manager }}
+          cache: ${{ inputs.package-manager != 'bun' && inputs.package-manager || '' }}
           cache-dependency-path: |
             ${{ inputs.install-directory }}/package-lock.json
             ${{ inputs.install-directory }}/pnpm-lock.yaml

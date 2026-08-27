@@ -21,6 +21,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 
 ### Changed
 
+- `publish-npm` disables `setup-node` cache for bun because empty-string is falsy (the old `== bun && '' || pm` evaluated to `bun`).
 - Public `name:` is `<Layer> / <Subject>` (`Release` is the only layer-only name).
 - CI job id is `ci` (was `build` or `check`). Publish job id is `publish`. Callee `jobs.<id>.name` is unset except `release-rust.yml` `Build ${{ matrix.target }}` and the `self-ci.yml` aggregator `Self / CI`.
 - Version inputs are `{tool}-version`. `toolchain` → `rust-version`.
