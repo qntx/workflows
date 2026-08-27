@@ -39,7 +39,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - Nested `uses:` jobs no longer set `timeout-minutes`. `self-release.yml` matches `v*.*.*` only.
 - `ops-sync` rsync excludes `.github` (and `.git`). Default dest `.` remains valid. Root sync has no `--delete`; an already-copied consumer `.github` is not removed.
 - Empty `cliff-config` omits the git-cliff `config` key so the action default `cliff.toml` applies.
-- `parse-env-block` allowlists build/cross keys only (`CARGO_TARGET_*`, `CC`/`CXX`/`*FLAGS`, `RUSTFLAGS`, …).
+- `parse-env-block` allowlists build/cross keys only (`CARGO_TARGET_*_LINKER` / `*_RUNNER` / `*_RUSTFLAGS` / `*_RUSTDOCFLAGS` / `*_AR`, `CC`/`CXX`/`*FLAGS`, `RUSTFLAGS`, …).
 - `ci-rust` `deny: true` fail-closes on non-Linux. `features` is a flag allowlist (argv/glob, not shell).
 - `CARGO_REGISTRY_TOKEN` is set only on the crates publish step.
 - `release-rust` prerelease tags set `prerelease` and skip `make_latest`.
