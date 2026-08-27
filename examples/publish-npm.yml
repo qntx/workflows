@@ -15,3 +15,5 @@ jobs:
     uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
     with:
       package-manager: npm
+      # Monorepo: install-directory: .
+      #            working-directory: packages/foo

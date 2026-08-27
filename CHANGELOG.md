@@ -40,6 +40,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 ### Added
 
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
+- `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.
 - `publish-container.yml` (replaces `container-build.yml` / `docker.yml`).
 - `ops-stale.yml`, `ops-sync.yml`.
 - `self-ci.yml`, `self-stale.yml`, `self-retag.yml`.

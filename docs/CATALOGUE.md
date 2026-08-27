@@ -16,7 +16,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ci-node.yml`           | `CI / Node.js`        | `ci`                         | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.              |
 | `ci-python.yml`         | `CI / Python`         | `ci`                         | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                      |
 | `ci-rust.yml`           | `CI / Rust`           | `ci`                         | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.     |
-| `publish-npm.yml`       | `Publish / npm`       | `publish`                    | npm/pnpm/yarn/bun. OIDC + `--provenance`, or `NPM_TOKEN` with no provenance.                     |
+| `publish-npm.yml`       | `Publish / npm`       | `publish`                    | npm/pnpm/yarn/bun. Install at `install-directory`, publish at `working-directory`. OIDC or token. |
 | `publish-pypi.yml`      | `Publish / PyPI`      | `publish`                    | OIDC + attestations, or `PYPI_TOKEN` with attestations off.                                      |
 | `publish-crates.yml`    | `Publish / crates.io` | `publish`                    | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.            |
 | `publish-container.yml` | `Publish / container` | `build` \| `publish` (mutex) | Dual-arch OCI. `build` when `push: false`; `publish` when `push: true`. `attest` default true.   |

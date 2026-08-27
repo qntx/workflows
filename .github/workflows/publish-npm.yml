@@ -11,8 +11,13 @@ on:
         required: false
         type: string
         default: 'ubuntu-latest'
+      install-directory:
+        description: 'Workspace root for install and lockfile cache. Monorepos keep this at the repository root.'
+        required: false
+        type: string
+        default: '.'
       working-directory:
-        description: 'Working directory relative to the repository root.'
+        description: 'Package directory to build, test, and npm publish. Independent of install-directory.'
         required: false
         type: string
         default: '.'
@@ -68,7 +73,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: qntx-workflows-publish-npm-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-publish-npm-${{ github.repository }}-${{ github.ref }}-${{ inputs.working-directory }}
   cancel-in-progress: false
 
 jobs:
@@ -95,16 +100,27 @@ jobs:
         with:
           bun-version: ${{ inputs.bun-version }}
 
+      # setup-node cache restore runs pnpm/yarn; enable them before the action.
+      - name: Enable Corepack
+        if: ${{ inputs.package-manager == 'pnpm' || inputs.package-manager == 'yarn' }}
+        run: corepack enable
+        working-directory: ${{ inputs.install-directory }}
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: ${{ inputs.registry-url }}
-          cache: ${{ inputs.package-manager == 'npm' && 'npm' || '' }}
-          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          cache: ${{ inputs.package-manager == 'bun' && '' || inputs.package-manager }}
+          cache-dependency-path: |
+            ${{ inputs.install-directory }}/package-lock.json
+            ${{ inputs.install-directory }}/pnpm-lock.yaml
+            ${{ inputs.install-directory }}/yarn.lock
+            ${{ inputs.install-directory }}/npm-shrinkwrap.json
           package-manager-cache: false
 
       - name: Install dependencies
+        working-directory: ${{ inputs.install-directory }}
         env:
           PM: ${{ inputs.package-manager }}
         run: |

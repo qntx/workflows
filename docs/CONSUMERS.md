@@ -46,6 +46,27 @@ secrets:
 
 Former `publish-npm-bun.yml` callers pass `package-manager: bun`.
 
+Monorepo: install the workspace at the repository root, publish one package per job. Do not set `working-directory` to the package and expect `npm ci` to run there.
+
+```yaml
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [packages/a, packages/b]
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      install-directory: .
+      working-directory: ${{ matrix.package }}
+      package-manager: pnpm
+```
+
+Each npm package needs its own Trusted Publisher (or `NPM_TOKEN`). Caller owns which packages to publish; this workflow does not scan git diffs or run Changesets.
+
 ## Publish / PyPI
 
 OIDC (no `PYPI_TOKEN`):

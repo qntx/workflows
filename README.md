@@ -38,7 +38,7 @@ CI job id is `ci`. Version inputs are `{tool}-version` (`rust-version`, `node-ve
 
 | Workflow                | Purpose                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `publish-npm.yml`       | npm / pnpm / yarn / bun. Empty `NPM_TOKEN` → OIDC + `--provenance`. Token path never provenance. |
+| `publish-npm.yml`       | npm / pnpm / yarn / bun. Workspace install at `install-directory`; publish one package at `working-directory`. |
 | `publish-pypi.yml`      | Empty `PYPI_TOKEN` → OIDC + attestations. Token path never attestations.                         |
 | `publish-crates.yml`    | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.            |
 | `publish-container.yml` | Dual-arch OCI push, SBOM, provenance. `attest` default `true`.                                   |
