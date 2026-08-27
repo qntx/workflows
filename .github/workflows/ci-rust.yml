@@ -38,6 +38,16 @@ on:
         required: false
         type: string
         default: ''
+      deny:
+        description: 'Run cargo-deny check. Requires deny.toml next to the Cargo.toml. Docker action; Linux runner only.'
+        required: false
+        type: boolean
+        default: false
+      deny-args:
+        description: 'Arguments passed to cargo-deny before the check subcommand.'
+        required: false
+        type: string
+        default: '--all-features'
 
 permissions:
   contents: read
@@ -80,7 +90,16 @@ jobs:
             echo '## CI / Rust'
             echo "- rustc: $(rustc --version)"
             echo "- cargo: $(cargo --version)"
+            echo "- deny: ${{ inputs.deny }}"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Deny
+        if: ${{ inputs.deny }}
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check
+          arguments: ${{ inputs.deny-args }}
+          manifest-path: ${{ inputs.working-directory }}/Cargo.toml
 
       - name: Format
         run: cargo fmt --all --check

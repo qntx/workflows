@@ -30,7 +30,7 @@ See [docs/CATALOGUE.md](docs/CATALOGUE.md) for `name:`, job ids, and inputs. Per
 | `ci-go.yml`      | `go mod tidy` drift check, `vet`, optional golangci-lint, race tests.                     |
 | `ci-node.yml`    | Matrix across Node versions. `package-manager` is `npm` / `pnpm` / `yarn`, not detected.  |
 | `ci-python.yml`  | uv install, ruff + pytest. `pyproject.toml` or `requirements.txt`.                        |
-| `ci-rust.yml`    | `fmt` / `clippy -D warnings` / `build` / `test`. Optional apt. Debian-like runner.        |
+| `ci-rust.yml`    | `fmt` / `clippy -D warnings` / `build` / `test`. Optional apt and `deny` (cargo-deny).    |
 
 CI job id is `ci`. Version inputs are `{tool}-version` (`rust-version`, `node-version`, …). `submodules` defaults to `false`. Foundry repos with `lib/` as a git submodule must pass `submodules: true`.
 

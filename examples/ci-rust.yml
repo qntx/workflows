@@ -15,3 +15,4 @@ jobs:
     with:
       rust-version: stable
       submodules: true
+      # deny: true   # requires deny.toml next to Cargo.toml

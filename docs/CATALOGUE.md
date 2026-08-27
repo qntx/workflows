@@ -15,7 +15,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ci-go.yml`             | `CI / Go`             | `ci`                         | `go mod tidy` drift, `vet`, optional golangci-lint (`golangci-lint-version` default `v2`), race. |
 | `ci-node.yml`           | `CI / Node.js`        | `ci`                         | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.              |
 | `ci-python.yml`         | `CI / Python`         | `ci`                         | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                      |
-| `ci-rust.yml`           | `CI / Rust`           | `ci`                         | fmt / clippy `-D warnings` / build / test. Input `rust-version`. Debian-like runner.             |
+| `ci-rust.yml`           | `CI / Rust`           | `ci`                         | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.     |
 | `publish-npm.yml`       | `Publish / npm`       | `publish`                    | npm/pnpm/yarn/bun. OIDC + `--provenance`, or `NPM_TOKEN` with no provenance.                     |
 | `publish-pypi.yml`      | `Publish / PyPI`      | `publish`                    | OIDC + attestations, or `PYPI_TOKEN` with attestations off.                                      |
 | `publish-crates.yml`    | `Publish / crates.io` | `publish`                    | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.            |
