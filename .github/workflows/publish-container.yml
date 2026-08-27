@@ -94,7 +94,7 @@ jobs:
       contents: read
     outputs:
       digest: ${{ steps.build.outputs.digest }}
-      image: ${{ format('{0}/{1}', env.REGISTRY, env.IMAGE_NAME) }}
+      image: ${{ format('{0}/{1}', env.REGISTRY, steps.detect.outputs.image-name) }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
@@ -118,6 +118,9 @@ jobs:
             exit 1
           fi
           echo "path=$path" >> "$GITHUB_OUTPUT"
+          # GHCR requires lowercase; bash 4 parameter expansion.
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >>"$GITHUB_ENV"
+          echo "image-name=${IMAGE_NAME,,}" >>"$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         if: ${{ inputs.platforms != 'linux/amd64' }}
@@ -165,7 +168,7 @@ jobs:
       attestations: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
-      image: ${{ format('{0}/{1}', env.REGISTRY, env.IMAGE_NAME) }}
+      image: ${{ format('{0}/{1}', env.REGISTRY, steps.detect.outputs.image-name) }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
@@ -189,6 +192,9 @@ jobs:
             exit 1
           fi
           echo "path=$path" >> "$GITHUB_OUTPUT"
+          # GHCR requires lowercase; bash 4 parameter expansion.
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >>"$GITHUB_ENV"
+          echo "image-name=${IMAGE_NAME,,}" >>"$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         if: ${{ inputs.platforms != 'linux/amd64' }}
