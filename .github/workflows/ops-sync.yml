@@ -116,12 +116,23 @@ jobs:
             exit 1
           fi
 
+          if [ -d "$src/.github" ]; then
+            echo '::warning::ops-sync: source contains .github; it will not be copied'
+          fi
+
           root="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$ROOT")"
           if [ "$DST" = "$root" ]; then
-            rsync -a --exclude='.git' --exclude='_source_repo' "$src"/ ./
+            rsync -a \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='_source_repo' \
+              "$src"/ ./
           else
             mkdir -p "$DST"
-            rsync -a --delete "$src"/ "$DST"/
+            rsync -a --delete \
+              --exclude='.git' \
+              --exclude='.github' \
+              "$src"/ "$DST"/
           fi
 
           rm -rf _source_repo

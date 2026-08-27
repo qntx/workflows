@@ -36,11 +36,21 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - Third-party `uses:` are SHA-pinned (`owner/repo@<40-char-sha> # tag`). Same-repository references use `$/` with no `@ref`.
 - Concurrency groups are `qntx-workflows-<stem>-${{ github.repository }}-${{ github.ref }}`, not `${{ github.workflow }}`. Pages and MkDocs groups are distinct.
 - Nested `uses:` jobs no longer set `timeout-minutes`. `self-release.yml` matches `v*.*.*` only.
+- `ops-sync` rsync excludes `.github` (and `.git`). Default dest `.` remains valid. Root sync has no `--delete`; an already-copied consumer `.github` is not removed.
+- Empty `cliff-config` omits the git-cliff `config` key so the action default `cliff.toml` applies.
+- `parse-env-block` allowlists build/cross keys only (`CARGO_TARGET_*`, `CC`/`CXX`/`*FLAGS`, `RUSTFLAGS`, …).
+- `ci-rust` `deny: true` fail-closes on non-Linux. `features` is a flag allowlist (argv/glob, not shell).
+- `CARGO_REGISTRY_TOKEN` is set only on the crates publish step.
+- `release-rust` prerelease tags set `prerelease` and skip `make_latest`.
+- `self-retag` requires `target` major to match `major` and writes an annotated `vN`.
+- Dependabot `directories` includes `/` and `/actions/*`.
+- zizmor SARIF upload skips fork PRs.
 
 ### Added
 
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.
+- `setup-uv` v10.0.1 and `codeql-action` v4.37.9.
 - `publish-container.yml` (replaces `container-build.yml` / `docker.yml`).
 - `ops-stale.yml`, `ops-sync.yml`.
 - `self-ci.yml`, `self-stale.yml`, `self-retag.yml`.

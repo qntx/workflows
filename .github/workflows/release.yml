@@ -143,8 +143,16 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Generate changelog
-        id: cliff
+      - name: Generate changelog (default config)
+        if: inputs.cliff-config == ''
+        id: cliff_default
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          args: ${{ inputs.cliff-args }}
+
+      - name: Generate changelog (custom config)
+        if: inputs.cliff-config != ''
+        id: cliff_custom
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
         with:
           config: ${{ inputs.cliff-config }}
@@ -156,7 +164,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           name: ${{ inputs.name || steps.tag.outputs.name }}
-          body: ${{ steps.cliff.outputs.content }}
+          body: ${{ steps.cliff_custom.outputs.content || steps.cliff_default.outputs.content }}
           draft: ${{ inputs.draft }}
           prerelease: ${{ steps.pre.outputs.flag }}
           files: ${{ inputs.files }}

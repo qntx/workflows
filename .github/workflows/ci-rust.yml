@@ -29,7 +29,7 @@ on:
         type: string
         default: 'stable'
       features:
-        description: 'Cargo feature flags passed to build/test (e.g. --all-features, --no-default-features).'
+        description: 'Cargo feature flags: --all-features, --no-default-features, or --features <list>.'
         required: false
         type: string
         default: '--all-features'
@@ -68,6 +68,8 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       FEATURES: ${{ inputs.features }}
+      DENY: ${{ inputs.deny }}
+      DENY_ARGS: ${{ inputs.deny-args }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
@@ -90,8 +92,39 @@ jobs:
             echo '## CI / Rust'
             echo "- rustc: $(rustc --version)"
             echo "- cargo: $(cargo --version)"
-            echo "- deny: ${{ inputs.deny }}"
+            echo "- deny: ${DENY}"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Check feature flags
+        run: |
+          set -euo pipefail
+          case "$FEATURES" in
+            --all-features | --no-default-features) ;;
+            --features\ *)
+              rest="${FEATURES#--features }"
+              if ! [[ "$rest" =~ ^[A-Za-z0-9_,-]+$ ]]; then
+                echo '::error::features list must match [A-Za-z0-9_,-]+'
+                exit 1
+              fi
+              ;;
+            *)
+              echo '::error::features must be --all-features, --no-default-features, or --features <list>'
+              exit 1
+              ;;
+          esac
+
+      - name: Require Linux for cargo-deny
+        if: ${{ inputs.deny }}
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS}" != Linux ]; then
+            echo '::error::cargo-deny requires a Linux runner (Docker action)'
+            exit 1
+          fi
+          if ! [[ "$DENY_ARGS" =~ ^[A-Za-z0-9_:,./[:space:]-]*$ ]]; then
+            echo '::error::deny-args charset'
+            exit 1
+          fi
 
       - name: Deny
         if: ${{ inputs.deny }}

@@ -65,6 +65,10 @@ publish_one() {
 }
 
 if [ -n "${PACKAGES:-}" ]; then
+  if ! printf '%s' "$PACKAGES" | grep -Eq '^[A-Za-z0-9_[:space:]-]+$'; then
+    echo '::error::packages charset'
+    exit 1
+  fi
   # shellcheck disable=SC2086
   for pkg in $PACKAGES; do
     publish_one "$pkg"

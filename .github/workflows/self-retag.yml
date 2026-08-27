@@ -43,8 +43,8 @@ jobs:
             echo "::error::major must match ^[0-9]+$ (got ${MAJOR})"
             exit 1
           fi
-          if ! [[ "$TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::target must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (got ${TARGET})"
+          if ! [[ "$TARGET" =~ ^v${MAJOR}\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::target must be v${MAJOR}.X.Y (got ${TARGET})"
             exit 1
           fi
 
@@ -63,5 +63,5 @@ jobs:
           fi
 
           target_peeled="$(git rev-parse "${TARGET}^{commit}")"
-          git tag -f "v${MAJOR}" "$target_peeled"
+          git tag -f -a "v${MAJOR}" -m "track v${MAJOR}.x.x" "$target_peeled"
           git push -f origin "v${MAJOR}"

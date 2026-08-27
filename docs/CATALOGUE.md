@@ -25,7 +25,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `deploy-pages.yml`      | `Deploy / Pages`      | `build`, `deploy`            | Bun build + Pages artifact API. `deploy` skipped on `pull_request`.                              |
 | `deploy-mkdocs.yml`     | `Deploy / MkDocs`     | `deploy`                     | `mkdocs gh-deploy --force` (branch push, not Pages artifact).                                    |
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                      | `actions/stale`. `workflow_call` only.                                                           |
-| `ops-sync.yml`          | `Ops / Sync`          | `sync`                       | Folder mirror. Secret `SYNC_TOKEN`. Path guard rejects `.git` / `.github`.                       |
+| `ops-sync.yml`          | `Ops / Sync`          | `sync`                       | Folder mirror. Dest path jail blocks `.git`/`.github` as dest. rsync never copies those names.   |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 

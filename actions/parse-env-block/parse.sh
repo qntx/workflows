@@ -11,9 +11,12 @@ if [ -z "$block" ]; then
   exit 0
 fi
 
-forbidden_key() {
+allowed_key() {
   case "$1" in
-    GITHUB_ENV | GITHUB_PATH | GITHUB_OUTPUT | GITHUB_ACTION_PATH) return 0 ;;
+    CARGO_TARGET_*) return 0 ;;
+    CC | CXX | AR | RANLIB | CFLAGS | CXXFLAGS | CPPFLAGS | LDFLAGS) return 0 ;;
+    RUSTFLAGS | RUSTC_WRAPPER | RUSTC_WORKSPACE_WRAPPER) return 0 ;;
+    BINDGEN_EXTRA_CLANG_ARGS | BINDGEN_EXTRA_CLANG_ARGS_*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -35,8 +38,8 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
 
   key="${line%%=*}"
-  if forbidden_key "$key"; then
-    echo "::error::parse-env-block: forbidden key ${key}"
+  if ! allowed_key "$key"; then
+    echo "::error::parse-env-block: unknown key ${key}"
     exit 1
   fi
 
