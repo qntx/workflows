@@ -46,6 +46,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `self-retag` requires `target` major to match `major` and writes an annotated `vN`.
 - Dependabot `directories` includes `/` and `/actions/*`.
 - zizmor SARIF upload skips fork PRs.
+- Auto prerelease now requires a hyphen before the token; `-prefix`/`-prepare`/`-arch` are stable; `rc1` still prerelease.
 
 ### Added
 

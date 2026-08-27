@@ -204,7 +204,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.name }}
         run: |
           set -euo pipefail
-          if [[ "$TAG" =~ (alpha|beta|rc|pre|preview|dev|nightly) ]]; then
+          if [[ "$TAG" =~ -(alpha|beta|rc|preview|pre|dev|nightly)($|[.0-9-]) ]]; then
             echo 'flag=true' >>"$GITHUB_OUTPUT"
           else
             echo 'flag=false' >>"$GITHUB_OUTPUT"

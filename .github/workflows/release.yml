@@ -115,7 +115,7 @@ jobs:
           set -euo pipefail
           case "$MODE" in
             auto)
-              if [[ "$TAG" =~ (alpha|beta|rc|pre|preview|dev|nightly) ]]; then
+              if [[ "$TAG" =~ -(alpha|beta|rc|preview|pre|dev|nightly)($|[.0-9-]) ]]; then
                 flag=true
               else
                 flag=false
