@@ -72,7 +72,12 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f pyproject.toml ]; then
-            uv sync --all-extras
+            # Honor uv.lock when present so CI cannot silently rewrite it.
+            if [ -f uv.lock ]; then
+              uv sync --all-extras --frozen
+            else
+              uv sync --all-extras
+            fi
             echo "$PWD/.venv/bin" >>"$GITHUB_PATH"
           elif [ -f requirements.txt ]; then
             uv pip install --system -r requirements.txt ruff pytest
