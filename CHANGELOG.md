@@ -29,6 +29,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `foundry-profile` default is `ci` (was `default`).
 - `submodules` default is `false` on every `ci-*`. Foundry callers with `lib/` must pass `submodules: true`.
 - Node `package-manager` default is `npm` and is not auto-detected.
+- `ci-node` default `node-versions` is `["22", "24"]` (drops Node 20). Breaking.
 - `bun-version` default is `1.4`. `latest` is not a default.
 - `golangci-lint-version` default is `v2.13` (v9 rejects `v2`).
 - Container default platforms are `linux/amd64,linux/arm64`. `attest` default is `true`. `push: true` (default) runs job `publish`, not `build`.

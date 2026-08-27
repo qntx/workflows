@@ -27,7 +27,7 @@ on:
         description: 'JSON array of Node.js versions to test against.'
         required: false
         type: string
-        default: '["20", "22", "24"]'
+        default: '["22", "24"]'
       package-manager:
         description: 'Package manager to use (npm, pnpm, yarn). Not auto-detected.'
         required: false
