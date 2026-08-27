@@ -29,7 +29,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `submodules` default is `false` on every `ci-*`. Foundry callers with `lib/` must pass `submodules: true`.
 - Node `package-manager` default is `npm` and is not auto-detected.
 - `bun-version` default is `1.4`. `latest` is not a default.
-- `golangci-lint-version` default is `v2`.
+- `golangci-lint-version` default is `v2.13` (v9 rejects `v2`).
 - Container default platforms are `linux/amd64,linux/arm64`. `attest` default is `true`. `push: true` (default) runs job `publish`, not `build`.
 - npm/PyPI: non-empty token never passes `--provenance` / attestations and does not require caller `id-token`. Empty token is OIDC and does.
 - `ops-stale.yml` is `workflow_call` only. Callers own `schedule`.

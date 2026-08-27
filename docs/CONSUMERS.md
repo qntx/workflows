@@ -33,6 +33,8 @@ permissions:
   contents: read
 ```
 
+`ci-go.yml` `golangci-lint-version` must be `v2.N`, `v2.N.M`, or `latest`. Do not pass `v2`.
+
 ## Publish / npm
 
 OIDC (no `NPM_TOKEN`):
