@@ -11,8 +11,6 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | File                    | `name:`               | Job ids                      | Purpose                                                                                          |
 | ----------------------- | --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------ |
 | `ci-bun.yml`            | `CI / Bun`            | `ci`                         | Bun install / lint / typecheck / build / test. `bun-version` default `1.4`.                      |
-| `ci-cpp.yml`            | `CI / C++`            | `ci`                         | CMake + ccache + optional ctest. Debian-like runner (apt).                                       |
-| `ci-dart.yml`           | `CI / Dart`           | `ci`                         | `dart format` / `analyze --fatal-infos` / `test`. Input `dart-version`.                          |
 | `ci-foundry.yml`        | `CI / Foundry`        | `ci`                         | Forge fmt / build --sizes / test. `foundry-profile` default `ci`.                                |
 | `ci-go.yml`             | `CI / Go`             | `ci`                         | `go mod tidy` drift, `vet`, optional golangci-lint (`golangci-lint-version` default `v2`), race. |
 | `ci-node.yml`           | `CI / Node.js`        | `ci`                         | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.              |
@@ -29,7 +27,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                      | `actions/stale`. `workflow_call` only.                                                           |
 | `ops-sync.yml`          | `Ops / Sync`          | `sync`                       | Folder mirror. Secret `SYNC_TOKEN`. Path guard rejects `.git` / `.github`.                       |
 
-Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry / cpp).
+Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
 ## Private (`self-*`)
 

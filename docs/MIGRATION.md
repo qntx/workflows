@@ -26,19 +26,20 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 | `stale.yml@main`              | `ops-stale.yml@v2`             | None required. openai-python caller job id is `close-stale`.                                                          | Same as repo-stale.                                                                  | `close-stale / stale` (openai-python); other repos: `{caller-job} / stale`                            |
 | `repo-sync-folder.yml@main`   | `ops-sync.yml@v2`              | Secret `token` → `SYNC_TOKEN` (omit to use `github.token`).                                                           | `contents: write`                                                                    | `sync / sync`                                                                                         |
 | `gen-openapi-client.yml@main` | **deleted**                    | No replacement. No `gen-` prefix.                                                                                     | —                                                                                    | —                                                                                                     |
+| `ci-cpp.yml@main`             | **deleted**                    | No replacement. Historical `c-cpp.yml` is also gone.                                                                  | —                                                                                    | —                                                                                                     |
+| `ci-dart.yml@main`            | **deleted**                    | No replacement. Historical `dart.yml` is also gone.                                                                   | —                                                                                    | —                                                                                                     |
 
 ## Breaking input and secret renames
 
 | Old                                            | New                                                                           |
 | ---------------------------------------------- | ----------------------------------------------------------------------------- |
 | `toolchain`                                    | `rust-version` (`ci-rust`, `publish-crates`, `release-rust`)                  |
-| `sdk`                                          | `dart-version`                                                                |
 | `PYPI_API_TOKEN`                               | `PYPI_TOKEN`                                                                  |
 | `token` (`repo-sync-folder`)                   | `SYNC_TOKEN`                                                                  |
 | `registry-username` / `registry-password`      | `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`                                     |
 | `publish-npm-bun.yml`                          | `publish-npm.yml` + `package-manager: bun`                                    |
 | `foundry-profile` default `default`            | default `ci`                                                                  |
-| C++ / Foundry implicit `submodules: recursive` | `submodules: false`. Foundry `lib/` callers **must** pass `submodules: true`. |
+| Foundry implicit `submodules: recursive`       | `submodules: false`. Foundry `lib/` callers **must** pass `submodules: true`. |
 | Node package manager auto-detect               | `package-manager` default `'npm'`                                             |
 | `bun-version: latest`                          | default `'1.4'`                                                               |
 | `docker.yml` single-arch amd64                 | `publish-container.yml` default `linux/amd64,linux/arm64`, `attest: true`     |
@@ -47,7 +48,7 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 
 ## Deleted names (not restored)
 
-`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `repo-stale.yml`, `stale.yml`, `repo-sync-folder.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
+`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-stale.yml`, `stale.yml`, `repo-sync-folder.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
 
 ## Post-cutover scan
 
@@ -55,4 +56,4 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 gh search code --owner qntx 'qntx/workflows/.github/workflows' --limit 200
 ```
 
-Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `repo-stale.yml`, `stale.yml@`, `repo-sync-folder.yml`, `gen-openapi`.
+Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-stale.yml`, `stale.yml@`, `repo-sync-folder.yml`, `gen-openapi`.

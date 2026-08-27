@@ -16,16 +16,17 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `container-build.yml`. Call `publish-container.yml`.
 - `repo-stale.yml` and `stale.yml`. Call `ops-stale.yml`. This repository's cron is `self-stale.yml`.
 - `repo-sync-folder.yml`. Call `ops-sync.yml`.
+- `ci-cpp.yml` and `ci-dart.yml`. No replacement.
 - Restored-name shims were never added. Already-deleted `python.yml`, `python-publish.yml`, and `docker.yml` stay deleted (`ci-python.yml`, `publish-pypi.yml`, `publish-container.yml`).
 
 ### Changed
 
 - Public `name:` is `<Layer> / <Subject>` (`Release` is the only layer-only name).
 - CI job id is `ci` (was `build` or `check`). Publish job id is `publish`. Callee `jobs.<id>.name` is unset except `release-rust.yml` `Build ${{ matrix.target }}` and the `self-ci.yml` aggregator `Self / CI`.
-- Version inputs are `{tool}-version`. `toolchain` → `rust-version`. `sdk` → `dart-version`.
+- Version inputs are `{tool}-version`. `toolchain` → `rust-version`.
 - Secrets are `SCREAMING_SNAKE`. `PYPI_API_TOKEN` → `PYPI_TOKEN`. Sync `token` → `SYNC_TOKEN`. Container `registry-username` / `registry-password` → `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`.
 - `foundry-profile` default is `ci` (was `default`).
-- `submodules` default is `false` on every `ci-*`. C++ no longer force-recurses. Foundry callers with `lib/` must pass `submodules: true`.
+- `submodules` default is `false` on every `ci-*`. Foundry callers with `lib/` must pass `submodules: true`.
 - Node `package-manager` default is `npm` and is not auto-detected.
 - `bun-version` default is `1.4`. `latest` is not a default.
 - `golangci-lint-version` default is `v2`.
