@@ -6,7 +6,7 @@ fail=0
 root="$(mktemp -d)"
 trap 'rm -rf "$root"' EXIT
 
-mkdir -p "$root/.git" "$root/.github/workflows" "$root/content/docs" "$root/foo"
+mkdir -p "$root/.git" "$root/.github/workflows" "$root/.github/ISSUE_TEMPLATE" "$root/content/docs" "$root/foo"
 
 run_guard() {
   local src="$1" dst="$2"
@@ -47,6 +47,8 @@ expect_fail 'dest .git/config' 'content' '.git/config'
 expect_fail 'src ../../.git' '../../.git' 'content'
 expect_fail 'src /etc' '/etc' 'content'
 expect_fail 'src foo/../../.github' 'foo/../../.github' 'content'
+expect_fail 'src .github dest .' '.github' '.'
+expect_fail 'src .github/ISSUE_TEMPLATE dest templates' '.github/ISSUE_TEMPLATE' 'templates'
 
 if [ "$fail" -ne 0 ]; then
   echo "protect-sync-path tests failed"

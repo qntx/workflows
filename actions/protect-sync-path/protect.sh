@@ -73,9 +73,14 @@ if ! under_root "$dst_abs"; then
   exit 1
 fi
 
-if [[ "$dst_abs" == "$root_abs/.git" || "$dst_abs" == "$root_abs/.git/"* ||
-  "$dst_abs" == "$root_abs/.github" || "$dst_abs" == "$root_abs/.github/"* ]]; then
-  echo '::error::protect-sync-path: destination is .git or .github'
+jailed() {
+  local p="$1"
+  [[ "$p" == "$root_abs/.git" || "$p" == "$root_abs/.git/"* ||
+    "$p" == "$root_abs/.github" || "$p" == "$root_abs/.github/"* ]]
+}
+
+if jailed "$src_abs" || jailed "$dst_abs"; then
+  echo '::error::protect-sync-path: source or destination is .git or .github'
   exit 1
 fi
 
