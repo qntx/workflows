@@ -13,4 +13,9 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         CMD: ${{ inputs.command }}
-      run: bash -c "$CMD" # zizmor: ignore[template-injection]
+      run: |
+        if [ -z "${CMD}" ]; then
+          echo '::error::run-trusted-command: command is empty'
+          exit 1
+        fi
+        bash -c "$CMD" # zizmor: ignore[template-injection]
