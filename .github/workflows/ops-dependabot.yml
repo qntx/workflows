@@ -1,0 +1,135 @@
+name: Ops / Dependabot
+
+# Caller owns on: (pull_request or pull_request_target). Do not checkout the PR.
+# Enables GitHub auto-merge; does not approve. Required reviews need a ruleset
+# bypass or a TOKEN that can satisfy them. Repo must allow auto-merge.
+
+on:
+  workflow_call:
+    inputs:
+      merge-method:
+        description: 'GitHub merge method: squash, merge, or rebase.'
+        required: false
+        type: string
+        default: 'squash'
+      allow-patch:
+        description: 'Auto-merge version-update:semver-patch.'
+        required: false
+        type: boolean
+        default: true
+      allow-minor:
+        description: 'Auto-merge version-update:semver-minor.'
+        required: false
+        type: boolean
+        default: true
+      allow-major:
+        description: 'Auto-merge version-update:semver-major. Default false.'
+        required: false
+        type: boolean
+        default: false
+      exempt-labels:
+        description: 'Comma-separated labels that skip auto-merge.'
+        required: false
+        type: string
+        default: 'do-not-merge,work-in-progress'
+    secrets:
+      TOKEN:
+        description: 'Token for gh. Omit to use github.token. Use a PAT only if GITHUB_TOKEN cannot enable auto-merge.'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.TOKEN || github.token }}
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN || github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          ACTOR: ${{ github.event.pull_request.user.login }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ALLOW_PATCH: ${{ inputs.allow-patch }}
+          ALLOW_MINOR: ${{ inputs.allow-minor }}
+          ALLOW_MAJOR: ${{ inputs.allow-major }}
+          MERGE_METHOD: ${{ inputs.merge-method }}
+          EXEMPT_LABELS: ${{ inputs.exempt-labels }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+
+          if [ "$ACTOR" != 'dependabot[bot]' ]; then
+            echo "::error::ops-dependabot: actor is not dependabot[bot]"
+            exit 1
+          fi
+
+          case "$MERGE_METHOD" in
+            squash | merge | rebase) ;;
+            *)
+              echo "::error::ops-dependabot: merge-method must be squash, merge, or rebase"
+              exit 1
+              ;;
+          esac
+
+          trim() {
+            local s="$1"
+            s="${s#"${s%%[![:space:]]*}"}"
+            s="${s%"${s##*[![:space:]]}"}"
+            printf '%s' "$s"
+          }
+
+          if [ -n "$EXEMPT_LABELS" ] && [ -n "$PR_LABELS" ]; then
+            IFS=',' read -ra exempt <<< "$EXEMPT_LABELS"
+            IFS=',' read -ra have <<< "$PR_LABELS"
+            for raw_e in "${exempt[@]}"; do
+              e="$(trim "$raw_e")"
+              [ -z "$e" ] && continue
+              for raw_h in "${have[@]}"; do
+                h="$(trim "$raw_h")"
+                if [ -n "$h" ] && [ "$h" = "$e" ]; then
+                  echo "::notice::ops-dependabot: skip, exempt label ${e}"
+                  exit 0
+                fi
+              done
+            done
+          fi
+
+          allowed=0
+          case "$UPDATE_TYPE" in
+            version-update:semver-patch)
+              [ "$ALLOW_PATCH" = true ] && allowed=1
+              ;;
+            version-update:semver-minor)
+              [ "$ALLOW_MINOR" = true ] && allowed=1
+              ;;
+            version-update:semver-major)
+              [ "$ALLOW_MAJOR" = true ] && allowed=1
+              ;;
+            *)
+              echo "::notice::ops-dependabot: skip, unhandled update-type '${UPDATE_TYPE}'"
+              exit 0
+              ;;
+          esac
+
+          if [ "$allowed" -ne 1 ]; then
+            echo "::notice::ops-dependabot: skip, ${UPDATE_TYPE} is not enabled"
+            exit 0
+          fi
+
+          gh pr merge --auto "--${MERGE_METHOD}" --delete-branch "$PR_URL"

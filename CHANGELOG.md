@@ -57,8 +57,8 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.
 - `setup-uv` v10.0.1 and `codeql-action` v4.37.9.
 - `publish-container.yml` (replaces `container-build.yml` / `docker.yml`).
-- `ops-stale.yml`, `ops-sync.yml`.
-- `self-ci.yml`, `self-stale.yml`, `self-retag.yml`.
+- `ops-stale.yml`, `ops-sync.yml`, `ops-dependabot.yml`.
+- `self-ci.yml`, `self-stale.yml`, `self-dependabot.yml`, `self-retag.yml`.
 - Private composites under `actions/` (`hardened-checkout`, `apt-install`, `setup-rust`, `parse-env-block`, `protect-sync-path`, `run-trusted-command`, `publish-crates`).
 - `docs/CATALOGUE.md`, `docs/CONSUMERS.md`, `docs/MIGRATION.md`, `examples/`.
 - `cliff.toml` for git-cliff (conventional commits).

@@ -61,21 +61,23 @@ Publish job id is `publish`. `publish-container.yml` splits mutually exclusive `
 
 ### Ops
 
-| Workflow        | Purpose                                                            |
-| --------------- | ------------------------------------------------------------------ |
-| `ops-stale.yml` | `actions/stale`. `workflow_call` only; the caller owns `schedule`. |
-| `ops-sync.yml`  | Mirror a folder from another repository. Secret `SYNC_TOKEN`.      |
+| Workflow             | Purpose                                                             |
+| -------------------- | ------------------------------------------------------------------- |
+| `ops-stale.yml`      | `actions/stale`. `workflow_call` only; the caller owns `schedule`.  |
+| `ops-sync.yml`       | Mirror a folder from another repository. Secret `SYNC_TOKEN`.       |
+| `ops-dependabot.yml` | Enable auto-merge on Dependabot PRs. No checkout. Does not approve. |
 
 ### This repository only
 
 Do not `uses:` these from other repositories.
 
-| Workflow           | Purpose                                               |
-| ------------------ | ----------------------------------------------------- |
-| `self-ci.yml`      | actionlint, zizmor, pinact, format, composite tests.  |
-| `self-release.yml` | Annotated `v*.*.*` tags → `release.yml`.              |
-| `self-stale.yml`   | This repository's stale cron.                         |
-| `self-retag.yml`   | Force-move `v<major>` onto an existing immutable tag. |
+| Workflow              | Purpose                                               |
+| --------------------- | ----------------------------------------------------- |
+| `self-ci.yml`         | actionlint, zizmor, pinact, format, composite tests.  |
+| `self-release.yml`    | Annotated `v*.*.*` tags → `release.yml`.              |
+| `self-stale.yml`      | This repository's stale cron.                         |
+| `self-dependabot.yml` | Auto-merge this repository's Dependabot PRs.          |
+| `self-retag.yml`      | Force-move `v<major>` onto an existing immutable tag. |
 
 ## Usage
 

@@ -182,3 +182,21 @@ permissions:
 secrets:
   SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # optional; falls back to github.token
 ```
+
+## Ops / Dependabot
+
+```yaml
+on:
+  pull_request:
+permissions:
+  contents: write
+  pull-requests: write
+```
+
+Caller owns `on:`. Prefer `pull_request` (Dependabot branches are in-repo). `pull_request_target` is allowed but the callee never checks out the PR. Do not add a checkout step on the caller job.
+
+Enables GitHub auto-merge (`gh pr merge --auto`). Does **not** approve. The repository must have **Allow auto-merge** on. Required checks still gate the merge. If rulesets require reviews, add a bypass for Dependabot or pass `TOKEN` (PAT/App) that can enable auto-merge; do not use this workflow to rubber-stamp CODEOWNERS.
+
+Defaults: squash; `semver-patch` and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`.
+
+Secret id is `TOKEN`.
