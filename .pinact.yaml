@@ -3,10 +3,12 @@ version: 3
 files:
   - pattern: .github/workflows/*.yml
   - pattern: actions/*/action.yml
+# Reject releases younger than 7 days when running `pinact run --update`.
+# `always` stays unset: the audit of already-pinned SHAs runs only under
+# `pinact run --verify-min-age`, so CI is not blocked by a fresh upstream tag.
+min_age:
+  value: 7
 rules:
   - ignore: true
     conditions:
       - expr: 'ActionName matches "^\\$/"'
-ignore_actions:
-  - name: '^\$/'
-    ref: '.*'

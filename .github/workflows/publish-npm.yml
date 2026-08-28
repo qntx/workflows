@@ -1,7 +1,8 @@
 name: Publish / npm
 
-# Non-empty NPM_TOKEN ⇒ token path, never --provenance; caller need not grant id-token.
-# Empty NPM_TOKEN ⇒ OIDC path, always --provenance; caller must set id-token: write.
+# Token and OIDC need different job permissions; GitHub will not let one job
+# request id-token: write when the caller only granted contents: read.
+# jobs.publish = token. jobs.oidc = OIDC. Both set name: publish.
 
 on:
   workflow_call:
@@ -63,161 +64,91 @@ on:
     outputs:
       package:
         description: 'package.json name'
-        value: ${{ jobs.publish.outputs.package }}
+        value: ${{ jobs.publish.outputs.package || jobs.oidc.outputs.package }}
       version:
         description: 'package.json version'
-        value: ${{ jobs.publish.outputs.version }}
+        value: ${{ jobs.publish.outputs.version || jobs.oidc.outputs.version }}
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: qntx-workflows-publish-npm-${{ github.repository }}-${{ github.ref }}-${{ inputs.working-directory }}
   cancel-in-progress: false
 
 jobs:
+  route:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.r.outputs.mode }}
+    steps:
+      - id: r
+        env:
+          TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TOKEN}" ]; then
+            echo 'mode=token' >>"$GITHUB_OUTPUT"
+          else
+            echo 'mode=oidc' >>"$GITHUB_OUTPUT"
+          fi
+
   publish:
+    name: publish
+    needs: route
+    if: ${{ needs.route.outputs.mode == 'token' }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    outputs:
+      package: ${{ steps.run.outputs.package }}
+      version: ${{ steps.run.outputs.version }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - id: run
+        uses: $/actions/publish-npm
+        with:
+          install-directory: ${{ inputs.install-directory }}
+          working-directory: ${{ inputs.working-directory }}
+          package-manager: ${{ inputs.package-manager }}
+          node-version: ${{ inputs.node-version }}
+          bun-version: ${{ inputs.bun-version }}
+          access: ${{ inputs.access }}
+          registry-url: ${{ inputs.registry-url }}
+          provenance: false
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  oidc:
+    name: publish
+    needs: route
+    if: ${{ needs.route.outputs.mode == 'oidc' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read
       id-token: write
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
     outputs:
-      package: ${{ steps.pkg.outputs.package }}
-      version: ${{ steps.pkg.outputs.version }}
+      package: ${{ steps.run.outputs.package }}
+      version: ${{ steps.run.outputs.version }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
-
-      - name: Set up Bun
-        if: ${{ inputs.package-manager == 'bun' }}
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - id: run
+        uses: $/actions/publish-npm
         with:
-          bun-version: ${{ inputs.bun-version }}
-
-      # setup-node cache restore runs pnpm/yarn; enable them before the action.
-      - name: Enable Corepack
-        if: ${{ inputs.package-manager == 'pnpm' || inputs.package-manager == 'yarn' }}
-        run: corepack enable
-        working-directory: ${{ inputs.install-directory }}
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
+          install-directory: ${{ inputs.install-directory }}
+          working-directory: ${{ inputs.working-directory }}
+          package-manager: ${{ inputs.package-manager }}
           node-version: ${{ inputs.node-version }}
+          bun-version: ${{ inputs.bun-version }}
+          access: ${{ inputs.access }}
           registry-url: ${{ inputs.registry-url }}
-          cache: ${{ inputs.package-manager != 'bun' && inputs.package-manager || '' }}
-          cache-dependency-path: |
-            ${{ inputs.install-directory }}/package-lock.json
-            ${{ inputs.install-directory }}/pnpm-lock.yaml
-            ${{ inputs.install-directory }}/yarn.lock
-            ${{ inputs.install-directory }}/npm-shrinkwrap.json
-          package-manager-cache: false
-
-      - name: Install dependencies
-        working-directory: ${{ inputs.install-directory }}
-        env:
-          PM: ${{ inputs.package-manager }}
-        run: |
-          set -euo pipefail
-          case "$PM" in
-            npm) npm ci ;;
-            pnpm)
-              corepack enable
-              pnpm install --frozen-lockfile
-              ;;
-            yarn)
-              corepack enable
-              if yarn --version | grep -q '^1\.'; then
-                yarn install --frozen-lockfile
-              else
-                yarn install --immutable
-              fi
-              ;;
-            bun)
-              bun install --frozen-lockfile
-              ;;
-            *)
-              echo "::error::Unsupported package manager: $PM"
-              exit 1
-              ;;
-          esac
-
-      - name: Build
-        env:
-          PM: ${{ inputs.package-manager }}
-        run: |
-          set -euo pipefail
-          case "$PM" in
-            npm)
-              npm run build --if-present
-              ;;
-            bun)
-              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-                bun run build
-              fi
-              ;;
-            *)
-              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-                "$PM" run build
-              fi
-              ;;
-          esac
-
-      - name: Test
-        env:
-          PM: ${{ inputs.package-manager }}
-        run: |
-          set -euo pipefail
-          case "$PM" in
-            npm)
-              npm test --if-present
-              ;;
-            bun)
-              if find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
-                   \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
-                   -print -quit | grep -q .; then
-                bun test
-              fi
-              ;;
-            *)
-              if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-                "$PM" test
-              fi
-              ;;
-          esac
-
-      - id: pkg
-        run: |
-          set -euo pipefail
-          echo "package=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
-          echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
-
-      - id: auth
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${NODE_AUTH_TOKEN}" ]; then
-            echo "mode=token" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=oidc" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish (OIDC)
-        if: ${{ steps.auth.outputs.mode == 'oidc' }}
-        env:
-          ACCESS: ${{ inputs.access }}
-        run: npm publish --access "$ACCESS" --provenance
-
-      - name: Publish (token)
-        if: ${{ steps.auth.outputs.mode == 'token' }}
-        env:
-          ACCESS: ${{ inputs.access }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access "$ACCESS"
+          provenance: true

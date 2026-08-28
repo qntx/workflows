@@ -1,0 +1,160 @@
+name: publish-npm
+description: Install, build, test, and npm publish. Caller job sets token vs OIDC permissions.
+inputs:
+  install-directory:
+    required: false
+    default: '.'
+  working-directory:
+    required: false
+    default: '.'
+  package-manager:
+    required: false
+    default: 'npm'
+  node-version:
+    required: false
+    default: '24'
+  bun-version:
+    required: false
+    default: '1.4'
+  access:
+    required: false
+    default: 'public'
+  registry-url:
+    required: false
+    default: 'https://registry.npmjs.org'
+  provenance:
+    description: 'Pass --provenance to npm publish (OIDC job only).'
+    required: false
+    default: 'false'
+outputs:
+  package:
+    value: ${{ steps.pkg.outputs.package }}
+  version:
+    value: ${{ steps.pkg.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Bun
+      if: ${{ inputs.package-manager == 'bun' }}
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Enable Corepack
+      if: ${{ inputs.package-manager == 'pnpm' || inputs.package-manager == 'yarn' }}
+      shell: bash
+      working-directory: ${{ inputs.install-directory }}
+      run: corepack enable
+
+    - name: Set up Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: ${{ inputs.registry-url }}
+        cache: ${{ inputs.package-manager != 'bun' && inputs.package-manager || '' }}
+        cache-dependency-path: |
+          ${{ inputs.install-directory }}/package-lock.json
+          ${{ inputs.install-directory }}/pnpm-lock.yaml
+          ${{ inputs.install-directory }}/yarn.lock
+          ${{ inputs.install-directory }}/npm-shrinkwrap.json
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.install-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          npm) npm ci ;;
+          pnpm)
+            corepack enable
+            pnpm install --frozen-lockfile
+            ;;
+          yarn)
+            corepack enable
+            if yarn --version | grep -q '^1\.'; then
+              yarn install --frozen-lockfile
+            else
+              yarn install --immutable
+            fi
+            ;;
+          bun)
+            bun install --frozen-lockfile
+            ;;
+          *)
+            echo "::error::Unsupported package manager: $PM"
+            exit 1
+            ;;
+        esac
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          npm)
+            npm run build --if-present
+            ;;
+          bun)
+            if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+              bun run build
+            fi
+            ;;
+          *)
+            if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+              "$PM" run build
+            fi
+            ;;
+        esac
+
+    - name: Test
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          npm)
+            npm test --if-present
+            ;;
+          bun)
+            if find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
+                 \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
+                 -print -quit | grep -q .; then
+              bun test
+            fi
+            ;;
+          *)
+            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+              "$PM" test
+            fi
+            ;;
+        esac
+
+    - id: pkg
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "package=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
+        echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+    - name: Publish
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ACCESS: ${{ inputs.access }}
+        PROVENANCE: ${{ inputs.provenance }}
+      run: |
+        set -euo pipefail
+        if [ "$PROVENANCE" = true ]; then
+          npm publish --access "$ACCESS" --provenance
+        else
+          npm publish --access "$ACCESS"
+        fi

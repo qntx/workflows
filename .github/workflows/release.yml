@@ -34,7 +34,7 @@ on:
         type: boolean
         default: false
       prerelease:
-        description: 'Prerelease flag. Use "auto" to detect alpha/beta/rc/pre/preview/dev/nightly in the tag name.'
+        description: 'Prerelease flag. auto: hyphen then alpha|beta|rc|preview|pre|dev|nightly, then end, `.`, `-`, or a digit (keeps rc1).'
         required: false
         type: string
         default: 'auto'

@@ -1,8 +1,8 @@
 name: Publish / PyPI
 
-# Non-empty PYPI_TOKEN ⇒ token path, attestations always false; caller need not grant id-token.
-# Empty PYPI_TOKEN ⇒ OIDC path, attestations from input (default true); caller must set
-# id-token: write and attestations: write.
+# Token and OIDC need different job permissions; GitHub will not let one job
+# request id-token: write when the caller only granted contents: read.
+# jobs.publish = token. jobs.oidc = OIDC. Both set name: publish.
 
 on:
   workflow_call:
@@ -49,67 +49,75 @@ on:
     outputs:
       attestations:
         description: 'Whether attestations were requested on the OIDC path.'
-        value: ${{ jobs.publish.outputs.attestations }}
+        value: ${{ jobs.route.outputs.mode == 'oidc' && inputs.attestations || false }}
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 concurrency:
   group: qntx-workflows-publish-pypi-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  route:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.r.outputs.mode }}
+    steps:
+      - id: r
+        env:
+          TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TOKEN}" ]; then
+            echo 'mode=token' >>"$GITHUB_OUTPUT"
+          else
+            echo 'mode=oidc' >>"$GITHUB_OUTPUT"
+          fi
+
   publish:
+    name: publish
+    needs: route
+    if: ${{ needs.route.outputs.mode == 'token' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
-    # Empty string is no environment protection; do not omit the key.
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: $/actions/publish-pypi
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          python-version: ${{ inputs.python-version }}
+          repository-url: ${{ inputs.repository-url }}
+          attestations: false
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+
+  oidc:
+    name: publish
+    needs: route
+    if: ${{ needs.route.outputs.mode == 'oidc' }}
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
       id-token: write
       attestations: write
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    outputs:
-      attestations: ${{ steps.auth.outputs.mode == 'oidc' && inputs.attestations || false }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: $/actions/publish-pypi
         with:
-          enable-cache: false
+          working-directory: ${{ inputs.working-directory }}
           python-version: ${{ inputs.python-version }}
-
-      - name: Build package
-        run: uv build
-
-      - name: Check distribution
-        run: |
-          set -euo pipefail
-          uv pip install --system twine
-          twine check dist/*
-
-      - id: auth
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${PYPI_TOKEN}" ]; then
-            echo "mode=token" >> "$GITHUB_OUTPUT"
-          else
-            echo "mode=oidc" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-        with:
-          password: ${{ secrets.PYPI_TOKEN }}
           repository-url: ${{ inputs.repository-url }}
-          packages-dir: ${{ inputs.working-directory }}/dist
-          attestations: ${{ steps.auth.outputs.mode == 'oidc' && inputs.attestations || false }}
+          attestations: ${{ inputs.attestations }}

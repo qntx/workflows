@@ -2,30 +2,39 @@ name: hardened-checkout
 description: Pin-safe checkout with persist-credentials default false.
 inputs:
   persist-credentials:
+    description: 'Leave the git credential in .git/config after checkout. Keep false unless later steps push.'
     required: false
     default: 'false'
   submodules:
+    description: 'Checkout submodules: false, true or recursive.'
     required: false
     default: 'false'
   fetch-depth:
+    description: 'Number of commits to fetch. 0 fetches the full history.'
     required: false
     default: '1'
   token:
+    description: 'Token used to fetch the repository.'
     required: false
     default: ${{ github.token }}
   repository:
+    description: 'Repository to checkout as owner/repo. Empty = current repository.'
     required: false
     default: ''
   ref:
+    description: 'Branch, tag or SHA to checkout. Empty = event default.'
     required: false
     default: ''
   path:
+    description: 'Directory under the workspace to checkout into. Empty = workspace root.'
     required: false
     default: ''
   sparse-checkout:
+    description: 'Newline-separated sparse-checkout patterns. Empty or `.` = full checkout (`.` would be an empty tree in non-cone mode).'
     required: false
     default: ''
   sparse-checkout-cone-mode:
+    description: 'Use cone mode when sparse-checkout is set.'
     required: false
     default: 'true'
 runs:
@@ -33,7 +42,8 @@ runs:
   steps:
     # Empty ref/path/sparse-checkout must not be forwarded: checkout treats a
     # missing key as "event default", but an empty string is not always the same.
-    - if: ${{ inputs.ref == '' && inputs.path == '' && inputs.sparse-checkout == '' }}
+    # Non-cone sparse-checkout of '.' materializes an empty tree; treat '.' as omit.
+    - if: ${{ inputs.ref == '' && inputs.path == '' && (inputs.sparse-checkout == '' || inputs.sparse-checkout == '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -42,7 +52,7 @@ runs:
         token: ${{ inputs.token }}
         repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref != '' && inputs.path == '' && inputs.sparse-checkout == '' }}
+    - if: ${{ inputs.ref != '' && inputs.path == '' && (inputs.sparse-checkout == '' || inputs.sparse-checkout == '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -52,7 +62,7 @@ runs:
         repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
         ref: ${{ inputs.ref }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref == '' && inputs.path != '' && inputs.sparse-checkout == '' }}
+    - if: ${{ inputs.ref == '' && inputs.path != '' && (inputs.sparse-checkout == '' || inputs.sparse-checkout == '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -62,7 +72,7 @@ runs:
         repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
         path: ${{ inputs.path }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref != '' && inputs.path != '' && inputs.sparse-checkout == '' }}
+    - if: ${{ inputs.ref != '' && inputs.path != '' && (inputs.sparse-checkout == '' || inputs.sparse-checkout == '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -73,7 +83,7 @@ runs:
         ref: ${{ inputs.ref }}
         path: ${{ inputs.path }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref == '' && inputs.path == '' && inputs.sparse-checkout != '' }}
+    - if: ${{ inputs.ref == '' && inputs.path == '' && (inputs.sparse-checkout != '' && inputs.sparse-checkout != '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -83,7 +93,7 @@ runs:
         repository: ${{ inputs.repository != '' && inputs.repository || github.repository }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref != '' && inputs.path == '' && inputs.sparse-checkout != '' }}
+    - if: ${{ inputs.ref != '' && inputs.path == '' && (inputs.sparse-checkout != '' && inputs.sparse-checkout != '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -94,7 +104,7 @@ runs:
         ref: ${{ inputs.ref }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref == '' && inputs.path != '' && inputs.sparse-checkout != '' }}
+    - if: ${{ inputs.ref == '' && inputs.path != '' && (inputs.sparse-checkout != '' && inputs.sparse-checkout != '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}
@@ -105,7 +115,7 @@ runs:
         path: ${{ inputs.path }}
         sparse-checkout: ${{ inputs.sparse-checkout }}
         sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
-    - if: ${{ inputs.ref != '' && inputs.path != '' && inputs.sparse-checkout != '' }}
+    - if: ${{ inputs.ref != '' && inputs.path != '' && (inputs.sparse-checkout != '' && inputs.sparse-checkout != '.') }}
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: ${{ inputs.persist-credentials }}

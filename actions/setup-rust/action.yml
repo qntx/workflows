@@ -2,15 +2,19 @@ name: setup-rust
 description: Install a Rust toolchain and cache cargo artifacts.
 inputs:
   rust-version:
+    description: 'Rust toolchain to install (stable, nightly, 1.90.0, ...).'
     required: false
     default: 'stable'
   components:
+    description: 'Comma-separated rustup components to install. Empty = none.'
     required: false
     default: 'rustfmt, clippy'
   targets:
+    description: 'Comma-separated rustup target triples to add. Empty = none.'
     required: false
     default: ''
   cache-key:
+    description: 'Extra cache key suffix to isolate cargo caches across jobs. Empty = default key.'
     required: false
     default: ''
 runs:

@@ -2,8 +2,10 @@ name: run-trusted-command
 description: Run a caller-supplied command via env, not template expansion in run.
 inputs:
   command:
+    description: 'Shell command to run. Passed through env, so it must come from a trusted source.'
     required: true
   working-directory:
+    description: 'Directory to run the command in.'
     required: false
     default: '.'
 runs:

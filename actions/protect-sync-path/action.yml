@@ -1,17 +1,22 @@
 name: protect-sync-path
-description: Reject sync paths that escape the worktree or overwrite .git/.github.
+description: Reject source or destination that escapes the worktree or whose realpath is .git/.github or a descendant.
 inputs:
   root:
+    description: 'Worktree root that both paths must stay inside. Empty = GITHUB_WORKSPACE.'
     required: false
     default: ''
   source:
+    description: 'Sync source path, relative to consumer root. Absolute paths, `..`, and .git/.github (and descendants) are rejected.'
     required: true
   destination:
+    description: 'Sync destination path, relative to consumer root. Absolute paths, `..`, and .git/.github (and descendants) are rejected.'
     required: true
 outputs:
   source-abs:
+    description: 'Validated absolute source path.'
     value: ${{ steps.guard.outputs.source-abs }}
   destination-abs:
+    description: 'Validated absolute destination path.'
     value: ${{ steps.guard.outputs.destination-abs }}
 runs:
   using: composite

@@ -23,7 +23,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 
 - `publish-npm` disables `setup-node` cache for bun because empty-string is falsy (the old `== bun && '' || pm` evaluated to `bun`).
 - Public `name:` is `<Layer> / <Subject>` (`Release` is the only layer-only name).
-- CI job id is `ci` (was `build` or `check`). Publish job id is `publish`. Callee `jobs.<id>.name` is unset except `release-rust.yml` `Build ${{ matrix.target }}` and the `self-ci.yml` aggregator `Self / CI`.
+- CI job id is `ci` (was `build` or `check`). Publish check-run right half is `publish`. Token vs OIDC (and container attest vs not) are mutex jobs that both set `name: publish`. Callee `jobs.<id>.name` is otherwise unset except `release-rust.yml` `Build ${{ matrix.target }}` and the `self-ci.yml` aggregator `Self / CI`.
 - Version inputs are `{tool}-version`. `toolchain` → `rust-version`.
 - Secrets are `SCREAMING_SNAKE`. `PYPI_API_TOKEN` → `PYPI_TOKEN`. Sync `token` → `SYNC_TOKEN`. Container `registry-username` / `registry-password` → `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`.
 - `foundry-profile` default is `ci` (was `default`).
@@ -32,13 +32,13 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `ci-node` default `node-versions` is `["22", "24"]` (drops Node 20). Breaking.
 - `bun-version` default is `1.4`. `latest` is not a default.
 - `golangci-lint-version` default is `v2.13` (v9 rejects `v2`).
-- Container default platforms are `linux/amd64,linux/arm64`. `attest` default is `true`. `push: true` (default) runs job `publish`, not `build`.
-- npm/PyPI: non-empty token never passes `--provenance` / attestations and does not require caller `id-token`. Empty token is OIDC and does.
+- Container default platforms are `linux/amd64,linux/arm64`. `attest` default is `true`. `push: true` runs job `publish` (attest) or `push` (`attest: false`); `push: false` runs `build`.
+- npm/PyPI: token job requests only `contents: read`. OIDC job requests `id-token` (PyPI also `attestations`). Token-only callers that omit `id-token` can run. Empty token is OIDC.
 - `ops-stale.yml` is `workflow_call` only. Callers own `schedule`.
 - Third-party `uses:` are SHA-pinned (`owner/repo@<40-char-sha> # tag`). Same-repository references use `$/` with no `@ref`.
 - Concurrency groups are `qntx-workflows-<stem>-${{ github.repository }}-${{ github.ref }}`, not `${{ github.workflow }}`. Pages and MkDocs groups are distinct.
 - Nested `uses:` jobs no longer set `timeout-minutes`. `self-release.yml` matches `v*.*.*` only.
-- `ops-sync` rsync excludes `.github` (and `.git`). Default dest `.` remains valid. Root sync has no `--delete`; an already-copied consumer `.github` is not removed.
+- `ops-sync` rejects source or dest under `.git`/`.github`. rsync also excludes those names. Default dest `.` remains valid. Root sync has no `--delete`.
 - Empty `cliff-config` omits the git-cliff `config` key so the action default `cliff.toml` applies.
 - `parse-env-block` allowlists build/cross keys only (`CARGO_TARGET_*_LINKER` / `*_RUNNER` / `*_RUSTFLAGS` / `*_RUSTDOCFLAGS` / `*_AR`, `CC`/`CXX`/`*FLAGS`, `RUSTFLAGS`, …).
 - `ci-rust` `deny: true` fail-closes on non-Linux. `features` is a flag allowlist (argv/glob, not shell).
@@ -46,11 +46,13 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 - `release-rust` prerelease tags set `prerelease` and skip `make_latest`.
 - `self-retag` requires `target` major to match `major` and writes an annotated `vN`.
 - Dependabot `directories` includes `/` and `/actions/*`.
-- zizmor SARIF upload skips fork PRs.
+- zizmor and scorecard SARIF uploads skip fork PRs.
+- `hardened-checkout` omits `sparse-checkout` when the value is empty or `.` (non-cone `.` is an empty tree).
 - Auto prerelease now requires a hyphen before the token; `-prefix`/`-prepare`/`-arch` are stable; `rc1` still prerelease.
 
 ### Added
 
+- `actions/publish-npm` and `actions/publish-pypi` (private). Called from mutex jobs in the public workflows.
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.
 - `setup-uv` v10.0.1 and `codeql-action` v4.37.9.

@@ -45,7 +45,7 @@ permissions:
   id-token: write
 ```
 
-Token-only (`NPM_TOKEN` set). Provenance is off. Do not require `id-token`:
+Token-only (`NPM_TOKEN` set). Provenance is off. The token job requests only `contents: read`. Do not grant `id-token`:
 
 ```yaml
 permissions:
@@ -88,7 +88,7 @@ permissions:
   attestations: write
 ```
 
-Token-only (`PYPI_TOKEN` set). Attestations are off. Do not require `id-token`:
+Token-only (`PYPI_TOKEN` set). Attestations are off. The token job requests only `contents: read`. Do not grant `id-token` or `attestations`:
 
 ```yaml
 permissions:
@@ -135,7 +135,7 @@ with:
   attest: false
 ```
 
-Default `push: true` runs job `publish` (not `build`). Default platforms are `linux/amd64,linux/arm64`. Pin `platforms: linux/amd64` to skip QEMU.
+Default `push: true` runs job `publish` when `attest: true`, or job `push` (`name: publish`) when `attest: false`. `push: false` runs job `build`. Default platforms are `linux/amd64,linux/arm64`. Pin `platforms: linux/amd64` to skip QEMU.
 
 ## Deploy / Pages
 

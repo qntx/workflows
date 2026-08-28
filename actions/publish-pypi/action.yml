@@ -1,0 +1,44 @@
+name: publish-pypi
+description: Build a Python dist and upload with twine/pypa. Caller job sets token vs OIDC permissions.
+inputs:
+  working-directory:
+    required: false
+    default: '.'
+  python-version:
+    required: false
+    default: '3.13'
+  repository-url:
+    required: false
+    default: ''
+  attestations:
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        enable-cache: false
+        python-version: ${{ inputs.python-version }}
+
+    - name: Build package
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: uv build
+
+    - name: Check distribution
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        uv pip install --system twine
+        twine check dist/*
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+      with:
+        password: ${{ env.PYPI_TOKEN }}
+        repository-url: ${{ inputs.repository-url }}
+        packages-dir: ${{ inputs.working-directory }}/dist
+        attestations: ${{ inputs.attestations }}

@@ -2,9 +2,11 @@ name: publish-crates
 description: Publish crates.io packages with already-uploaded skip and 429 backoff.
 inputs:
   packages:
+    description: 'Whitespace-separated crate names to publish in order. Empty = publish the current manifest.'
     required: false
     default: ''
   working-directory:
+    description: 'Directory containing the cargo manifest.'
     required: false
     default: '.'
 runs:
