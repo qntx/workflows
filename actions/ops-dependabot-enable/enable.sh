@@ -88,17 +88,32 @@ ops_dependabot_main() {
   decision="$(ops_dependabot_decide)"
   case "$decision" in
     merge)
-      local out
-      if out="$(ops_dependabot_enable 2>&1)"; then
+      local out n=0
+      while true; do
+        if out="$(ops_dependabot_enable 2>&1)"; then
+          printf '%s\n' "$out"
+          return 0
+        fi
+        if printf '%s\n' "$out" | grep -Eqi 'already enabled'; then
+          echo '::notice::ops-dependabot: auto-merge already enabled'
+          return 0
+        fi
+        # UNSTABLE = pending or failing checks. enablePullRequestAutoMerge
+        # rejects that. Wait for CLEAN (checks green) rather than merge-now.
+        if printf '%s\n' "$out" | grep -Fq 'unstable status'; then
+          n=$((n + 1))
+          if [ "$n" -ge 18 ]; then
+            printf '%s\n' "$out"
+            echo '::error::ops-dependabot: still unstable after waiting for checks'
+            return 1
+          fi
+          echo "::notice::ops-dependabot: retry ${n}/18, pull request unstable (checks pending or failing)"
+          sleep 10
+          continue
+        fi
         printf '%s\n' "$out"
-        return 0
-      fi
-      if printf '%s\n' "$out" | grep -Eqi 'already enabled|Pull request Auto merge is already enabled'; then
-        echo '::notice::ops-dependabot: auto-merge already enabled'
-        return 0
-      fi
-      printf '%s\n' "$out"
-      return 1
+        return 1
+      done
       ;;
     skip:*)
       echo "::notice::ops-dependabot: ${decision#skip:}"
