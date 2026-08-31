@@ -132,4 +132,21 @@ jobs:
             exit 0
           fi
 
-          gh pr merge --auto "--${MERGE_METHOD}" --delete-branch "$PR_URL"
+          # GitHub returns this when enableAutoMerge races a main update or
+          # a stale merge commit computed at PR open. Retry; do not fail the check.
+          n=0
+          until out="$(gh pr merge --auto "--${MERGE_METHOD}" --delete-branch "$PR_URL" 2>&1)"; do
+            n=$((n + 1))
+            if ! printf '%s\n' "$out" | grep -Fq 'Base branch was modified'; then
+              printf '%s\n' "$out"
+              exit 1
+            fi
+            if [ "$n" -ge 5 ]; then
+              printf '%s\n' "$out"
+              echo '::error::ops-dependabot: base branch kept changing after 5 tries'
+              exit 1
+            fi
+            echo "::notice::ops-dependabot: retry ${n}/5, base branch modified"
+            sleep $((n * 2))
+          done
+          printf '%s\n' "$out"
