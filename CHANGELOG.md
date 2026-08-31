@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PR template: document breaks in `docs/MIGRATION.md` and `CHANGELOG.md`; no shims / no dual contracts.
 - `self-retag` force-moves annotated `vN` to `origin/main` after squash. Input `target` is deleted.
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
+- `scorecard` checkout is `$/actions/hardened-checkout`.
 
 ### Removed
 
