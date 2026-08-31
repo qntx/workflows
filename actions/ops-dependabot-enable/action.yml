@@ -1,5 +1,5 @@
 name: ops-dependabot-enable
-description: Enable GitHub auto-merge on a Dependabot PR after update-type and label policy.
+description: Arm GitHub auto-merge, or squash-merge green Dependabot PRs on a schedule sweep.
 inputs:
   github-token:
     description: 'Token for gh (contents + pull-requests write).'
@@ -21,17 +21,23 @@ inputs:
     required: false
     default: ''
   pr-labels:
-    description: 'Comma-separated labels on the PR.'
+    description: 'Comma-separated labels on the PR. Unused on schedule (loaded from each PR).'
     required: false
     default: ''
   update-type:
-    description: 'dependabot/fetch-metadata update-type output.'
-    required: true
+    description: 'dependabot/fetch-metadata update-type. Unused on schedule (parsed from commit messages).'
+    required: false
+    default: ''
   actor:
-    description: 'PR author login.'
-    required: true
+    description: 'PR author login. Unused on schedule (loaded from each PR).'
+    required: false
+    default: ''
   pr-node-id:
-    description: 'GraphQL node id of the pull request.'
+    description: 'GraphQL node id. Required to arm auto-merge on pull_request.'
+    required: false
+    default: ''
+  event-name:
+    description: 'github.event_name (pull_request, pull_request_target, schedule, or workflow_dispatch).'
     required: true
 runs:
   using: composite
@@ -48,4 +54,6 @@ runs:
         UPDATE_TYPE: ${{ inputs.update-type }}
         ACTOR: ${{ inputs.actor }}
         PR_NODE_ID: ${{ inputs.pr-node-id }}
+        EVENT_NAME: ${{ inputs.event-name }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: bash "$GITHUB_ACTION_PATH/enable.sh"

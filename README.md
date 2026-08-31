@@ -61,11 +61,11 @@ Publish job id is `publish`. `publish-container.yml` splits mutually exclusive `
 
 ### Ops
 
-| Workflow             | Purpose                                                             |
-| -------------------- | ------------------------------------------------------------------- |
-| `ops-stale.yml`      | `actions/stale`. `workflow_call` only; the caller owns `schedule`.  |
-| `ops-sync.yml`       | Mirror a folder from another repository. Secret `SYNC_TOKEN`.       |
-| `ops-dependabot.yml` | Enable auto-merge on Dependabot PRs. No checkout. Does not approve. |
+| Workflow             | Purpose                                                            |
+| -------------------- | ------------------------------------------------------------------ |
+| `ops-stale.yml`      | `actions/stale`. `workflow_call` only; the caller owns `schedule`. |
+| `ops-sync.yml`       | Mirror a folder from another repository. Secret `SYNC_TOKEN`.      |
+| `ops-dependabot.yml` | Arm auto-merge; schedule squash-merges green Dependabot PRs.       |
 
 ### This repository only
 

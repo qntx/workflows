@@ -18,6 +18,7 @@ test-composites:
     bash actions/protect-sync-path/test.sh
     bash actions/parse-env-block/test.sh
     bash actions/apt-install/test.sh
+    bash actions/ops-dependabot-enable/test.sh
 
 # Lint all reusable and self workflows (requires actionlint on PATH).
 actionlint:
