@@ -338,18 +338,20 @@ ops_dependabot_sweep_one() {
 }
 
 ops_dependabot_sweep() {
-  local json pr fail=0
+  local n json fail=0
   if [ -z "${GITHUB_REPOSITORY:-}" ]; then
     echo 'ops-dependabot: GITHUB_REPOSITORY is empty' >&2
     return 2
   fi
-  json="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --app dependabot --limit 50 --json number,title,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits)"
-  while IFS= read -r pr; do
-    [ -z "$pr" ] && continue
-    if ! ops_dependabot_sweep_one "$pr"; then
+  # Do not list statusCheckRollup/commits in one GraphQL query: 50 PRs exceeds
+  # GitHub's 500k node cap. Number-only list, then one view per PR.
+  while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    json="$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json number,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits)"
+    if ! ops_dependabot_sweep_one "$json"; then
       fail=1
     fi
-  done < <(printf '%s' "$json" | jq -c '.[]')
+  done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --app dependabot --limit 50 --json number --jq '.[].number')
   return "$fail"
 }
 
