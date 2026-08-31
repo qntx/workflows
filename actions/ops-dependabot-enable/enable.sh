@@ -231,7 +231,10 @@ ops_dependabot_enable() {
 
 ops_dependabot_merge_now() {
   local n=0 out args
-  args=(pr merge --"${MERGE_METHOD}" --delete-branch)
+  # No --delete-branch: that flag also deletes a *local* git ref and this
+  # action does not checkout. Pass --repo; GH_REPO is not enough inside gh
+  # when there is no .git.
+  args=(pr merge --repo "$GITHUB_REPOSITORY" --"${MERGE_METHOD}")
   if [ -n "${HEAD_OID:-}" ]; then
     args+=(--match-head-commit "$HEAD_OID")
   fi
