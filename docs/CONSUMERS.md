@@ -188,14 +188,21 @@ secrets:
 ```yaml
 on:
   pull_request:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 permissions:
   contents: write
   pull-requests: write
 ```
 
-Caller owns `on:`. Prefer `pull_request` (Dependabot branches are in-repo). `pull_request_target` is allowed but the callee never checks out the PR. Do not add a checkout step on the caller job.
+Caller owns `on:`. `ops-dependabot.yml` has no cron. Prefer `pull_request` (Dependabot branches are in-repo). `pull_request_target` is allowed but the callee never checks out the PR. Do not add a checkout step on the caller job.
 
-Enables GitHub auto-merge (`gh pr merge --auto`). Does **not** approve. The repository must have **Allow auto-merge** on. Required checks still gate the merge. If rulesets require reviews, add a bypass for Dependabot or pass `TOKEN` (PAT/App) that can enable auto-merge; do not use this workflow to rubber-stamp CODEOWNERS.
+`pull_request` tries `enablePullRequestAutoMerge`. That mutation rejects `UNSTABLE` (pending or failing optional checks). This org does not set required checks, so the arm step is a no-op and must not fail. `check_suite` / `check_run` do not trigger workflows when the suite was created by GitHub Actions, so they cannot be the merge-when-green signal.
+
+`schedule` (and `workflow_dispatch`) lists open Dependabot PRs and squash-merges those whose other checks are green. No other checks after a 5-minute grace means the repo has no PR CI; then it merges. Does **not** approve. If rulesets require reviews, add a bypass for Dependabot or pass `TOKEN` (PAT/App) that can merge; do not use this workflow to rubber-stamp CODEOWNERS.
+
+The caller job `if:` must allow `schedule` / `workflow_dispatch`. A `dependabot[bot]`-only `if:` skips the sweep.
 
 Defaults: squash; `semver-patch` and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`.
 

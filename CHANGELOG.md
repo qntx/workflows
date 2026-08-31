@@ -52,7 +52,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 
 ### Added
 
-- `ops-dependabot-enable` composite: policy is tested; auto-merge uses `enablePullRequestAutoMerge` (not `gh pr merge --auto` / `mergePullRequest`). Waits and retries while GitHub reports `unstable status` (checks pending or failing).
+- `ops-dependabot-enable` composite: policy is tested; `pull_request` uses `enablePullRequestAutoMerge` (not `gh pr merge --auto` / `mergePullRequest`) and treats `UNSTABLE` as a no-op. `schedule` / `workflow_dispatch` squash-merges Dependabot PRs whose non-self checks are green. Does not poll inside the pull_request job.
 - `actions/publish-npm` and `actions/publish-pypi` (private). Called from mutex jobs in the public workflows.
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.

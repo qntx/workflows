@@ -1,8 +1,12 @@
 name: Ops / Dependabot
 
-# Caller owns on: (pull_request or pull_request_target). Do not checkout the PR.
-# Enables GitHub auto-merge; does not approve. Required reviews need a ruleset
-# bypass or a TOKEN that can satisfy them. Repo must allow auto-merge.
+# Caller owns on:. Use both:
+#   pull_request / pull_request_target — try to queue GitHub auto-merge
+#   schedule / workflow_dispatch — squash-merge Dependabot PRs whose checks are green
+# GitHub will not queue auto-merge without required checks (UNSTABLE). This job
+# is itself a pending check, so waiting on UNSTABLE deadlocks. check_suite and
+# check_run do not trigger when the suite was created by GitHub Actions.
+# Do not checkout the PR. Does not approve.
 
 on:
   workflow_call:
@@ -34,7 +38,7 @@ on:
         default: 'do-not-merge,work-in-progress'
     secrets:
       TOKEN:
-        description: 'Token for gh. Omit to use github.token. Use a PAT only if GITHUB_TOKEN cannot enable auto-merge.'
+        description: 'Token for gh. Omit to use github.token. Use a PAT only if GITHUB_TOKEN cannot merge.'
         required: false
 
 permissions:
@@ -42,19 +46,25 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
+  group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.event.pull_request.number || 'sweep' }}
   cancel-in-progress: true
 
 jobs:
   merge:
-    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') }}
+    if: >-
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]')
+      || (github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     steps:
       - id: meta
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        continue-on-error: true
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.TOKEN || github.token }}
@@ -71,3 +81,4 @@ jobs:
           update-type: ${{ steps.meta.outputs.update-type }}
           actor: ${{ github.event.pull_request.user.login }}
           pr-node-id: ${{ github.event.pull_request.node_id }}
+          event-name: ${{ github.event_name }}
