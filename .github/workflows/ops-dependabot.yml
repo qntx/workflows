@@ -59,94 +59,15 @@ jobs:
         with:
           github-token: ${{ secrets.TOKEN || github.token }}
 
-      - name: Enable auto-merge
-        env:
-          GH_TOKEN: ${{ secrets.TOKEN || github.token }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          ACTOR: ${{ github.event.pull_request.user.login }}
-          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
-          ALLOW_PATCH: ${{ inputs.allow-patch }}
-          ALLOW_MINOR: ${{ inputs.allow-minor }}
-          ALLOW_MAJOR: ${{ inputs.allow-major }}
-          MERGE_METHOD: ${{ inputs.merge-method }}
-          EXEMPT_LABELS: ${{ inputs.exempt-labels }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: |
-          set -euo pipefail
-
-          if [ "$ACTOR" != 'dependabot[bot]' ]; then
-            echo "::error::ops-dependabot: actor is not dependabot[bot]"
-            exit 1
-          fi
-
-          case "$MERGE_METHOD" in
-            squash | merge | rebase) ;;
-            *)
-              echo "::error::ops-dependabot: merge-method must be squash, merge, or rebase"
-              exit 1
-              ;;
-          esac
-
-          trim() {
-            local s="$1"
-            s="${s#"${s%%[![:space:]]*}"}"
-            s="${s%"${s##*[![:space:]]}"}"
-            printf '%s' "$s"
-          }
-
-          if [ -n "$EXEMPT_LABELS" ] && [ -n "$PR_LABELS" ]; then
-            IFS=',' read -ra exempt <<< "$EXEMPT_LABELS"
-            IFS=',' read -ra have <<< "$PR_LABELS"
-            for raw_e in "${exempt[@]}"; do
-              e="$(trim "$raw_e")"
-              [ -z "$e" ] && continue
-              for raw_h in "${have[@]}"; do
-                h="$(trim "$raw_h")"
-                if [ -n "$h" ] && [ "$h" = "$e" ]; then
-                  echo "::notice::ops-dependabot: skip, exempt label ${e}"
-                  exit 0
-                fi
-              done
-            done
-          fi
-
-          allowed=0
-          case "$UPDATE_TYPE" in
-            version-update:semver-patch)
-              [ "$ALLOW_PATCH" = true ] && allowed=1
-              ;;
-            version-update:semver-minor)
-              [ "$ALLOW_MINOR" = true ] && allowed=1
-              ;;
-            version-update:semver-major)
-              [ "$ALLOW_MAJOR" = true ] && allowed=1
-              ;;
-            *)
-              echo "::notice::ops-dependabot: skip, unhandled update-type '${UPDATE_TYPE}'"
-              exit 0
-              ;;
-          esac
-
-          if [ "$allowed" -ne 1 ]; then
-            echo "::notice::ops-dependabot: skip, ${UPDATE_TYPE} is not enabled"
-            exit 0
-          fi
-
-          # GitHub returns this when enableAutoMerge races a main update or
-          # a stale merge commit computed at PR open. Retry; do not fail the check.
-          n=0
-          until out="$(gh pr merge --auto "--${MERGE_METHOD}" --delete-branch "$PR_URL" 2>&1)"; do
-            n=$((n + 1))
-            if ! printf '%s\n' "$out" | grep -Fq 'Base branch was modified'; then
-              printf '%s\n' "$out"
-              exit 1
-            fi
-            if [ "$n" -ge 5 ]; then
-              printf '%s\n' "$out"
-              echo '::error::ops-dependabot: base branch kept changing after 5 tries'
-              exit 1
-            fi
-            echo "::notice::ops-dependabot: retry ${n}/5, base branch modified"
-            sleep $((n * 2))
-          done
-          printf '%s\n' "$out"
+      - uses: $/actions/ops-dependabot-enable
+        with:
+          github-token: ${{ secrets.TOKEN || github.token }}
+          merge-method: ${{ inputs.merge-method }}
+          allow-patch: ${{ inputs.allow-patch }}
+          allow-minor: ${{ inputs.allow-minor }}
+          allow-major: ${{ inputs.allow-major }}
+          exempt-labels: ${{ inputs.exempt-labels }}
+          pr-labels: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          update-type: ${{ steps.meta.outputs.update-type }}
+          actor: ${{ github.event.pull_request.user.login }}
+          pr-node-id: ${{ github.event.pull_request.node_id }}

@@ -52,7 +52,7 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 
 ### Added
 
-- `ops-dependabot` retries `gh pr merge --auto` on GitHub's `Base branch was modified` race (up to 5 times).
+- `ops-dependabot-enable` composite: policy is tested; auto-merge uses `enablePullRequestAutoMerge` (not `gh pr merge --auto` / `mergePullRequest`).
 - `actions/publish-npm` and `actions/publish-pypi` (private). Called from mutex jobs in the public workflows.
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.

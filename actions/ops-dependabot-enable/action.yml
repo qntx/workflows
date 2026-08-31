@@ -1,0 +1,51 @@
+name: ops-dependabot-enable
+description: Enable GitHub auto-merge on a Dependabot PR after update-type and label policy.
+inputs:
+  github-token:
+    description: 'Token for gh (contents + pull-requests write).'
+    required: true
+  merge-method:
+    description: 'squash, merge, or rebase.'
+    required: true
+  allow-patch:
+    description: 'true to auto-merge semver-patch.'
+    required: true
+  allow-minor:
+    description: 'true to auto-merge semver-minor.'
+    required: true
+  allow-major:
+    description: 'true to auto-merge semver-major.'
+    required: true
+  exempt-labels:
+    description: 'Comma-separated labels that skip auto-merge.'
+    required: false
+    default: ''
+  pr-labels:
+    description: 'Comma-separated labels on the PR.'
+    required: false
+    default: ''
+  update-type:
+    description: 'dependabot/fetch-metadata update-type output.'
+    required: true
+  actor:
+    description: 'PR author login.'
+    required: true
+  pr-node-id:
+    description: 'GraphQL node id of the pull request.'
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        MERGE_METHOD: ${{ inputs.merge-method }}
+        ALLOW_PATCH: ${{ inputs.allow-patch }}
+        ALLOW_MINOR: ${{ inputs.allow-minor }}
+        ALLOW_MAJOR: ${{ inputs.allow-major }}
+        EXEMPT_LABELS: ${{ inputs.exempt-labels }}
+        PR_LABELS: ${{ inputs.pr-labels }}
+        UPDATE_TYPE: ${{ inputs.update-type }}
+        ACTOR: ${{ inputs.actor }}
+        PR_NODE_ID: ${{ inputs.pr-node-id }}
+      run: bash "$GITHUB_ACTION_PATH/enable.sh"

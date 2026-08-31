@@ -26,7 +26,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `deploy-mkdocs.yml`     | `Deploy / MkDocs`     | `deploy`                       | `mkdocs gh-deploy --force` (branch push, not Pages artifact).                                             |
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                    |
 | `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Source or dest under `.git`/`.github` is rejected. rsync also excludes those names.        |
-| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Enable auto-merge on Dependabot PRs. No checkout. Does not approve. Caller owns `on:`.                    |
+| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | `enablePullRequestAutoMerge` via `$/actions/ops-dependabot-enable`. No checkout. Does not approve. Caller owns `on:`. |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
