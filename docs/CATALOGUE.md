@@ -26,7 +26,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `deploy-mkdocs.yml`     | `Deploy / MkDocs`     | `deploy`                       | `mkdocs gh-deploy --force` (branch push, not Pages artifact).                                             |
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                    |
 | `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Source or dest under `.git`/`.github` is rejected. rsync also excludes those names.        |
-| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Arm auto-merge; schedule squash-merges green Dependabot PRs. No checkout. Caller owns `on:`.              |
+| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Schedule squash-merge green Dependabot PRs. No auto-merge arm. No checkout. Caller owns `on:`.            |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
@@ -34,12 +34,12 @@ Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`)
 
 Not a consumer API. Required check-run name for this repository is `Self / CI`.
 
-| File                  | `name:`             | Job ids                                                                     | Purpose                                                                     |
-| --------------------- | ------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                   |
-| `self-release.yml`    | `Self / Release`    | `release`                                                                   | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.             |
-| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                     | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                    |
-| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                     | `on: pull_request` + `schedule` → `$/.github/workflows/ops-dependabot.yml`. |
-| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Force-move `v<major>` to an existing annotated `vX.Y.Z` tag.                |
+| File                  | `name:`             | Job ids                                                                     | Purpose                                                                          |
+| --------------------- | ------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                        |
+| `self-release.yml`    | `Self / Release`    | `release`                                                                   | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
+| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                     | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
+| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                     | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
+| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Force-move `v<major>` to an existing annotated `vX.Y.Z` tag.                     |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.

@@ -1,12 +1,10 @@
 # Caller owns on:. Pin at @v2.
-# pull_request: try to queue GitHub auto-merge (no-op without required checks).
-# schedule: squash-merge Dependabot PRs whose checks are green.
+# schedule / workflow_dispatch squash-merge green Dependabot PRs.
 # Do not checkout the PR. This workflow does not approve.
-# If rulesets require reviews, add a bypass for Dependabot or pass TOKEN.
+# Required reviews mean this workflow never merges those PRs (skip:BLOCKED).
 name: Dependabot
 
 on:
-  pull_request:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
@@ -17,9 +15,6 @@ permissions:
 
 jobs:
   merge:
-    if: >-
-      github.event_name != 'pull_request'
-      || github.event.pull_request.user.login == 'dependabot[bot]'
     permissions:
       contents: write
       pull-requests: write

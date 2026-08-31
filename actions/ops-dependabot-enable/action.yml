@@ -1,5 +1,5 @@
 name: ops-dependabot-enable
-description: Arm GitHub auto-merge, or squash-merge green Dependabot PRs on a schedule sweep.
+description: Squash-merge green Dependabot PRs on a schedule sweep.
 inputs:
   github-token:
     description: 'Token for gh (contents + pull-requests write).'
@@ -8,7 +8,7 @@ inputs:
     description: 'squash, merge, or rebase.'
     required: true
   allow-patch:
-    description: 'true to auto-merge semver-patch.'
+    description: 'true to auto-merge version-update:semver-patch and version-update:lockfile-only.'
     required: true
   allow-minor:
     description: 'true to auto-merge semver-minor.'
@@ -20,25 +20,6 @@ inputs:
     description: 'Comma-separated labels that skip auto-merge.'
     required: false
     default: ''
-  pr-labels:
-    description: 'Comma-separated labels on the PR. Unused on schedule (loaded from each PR).'
-    required: false
-    default: ''
-  update-type:
-    description: 'dependabot/fetch-metadata update-type. Unused on schedule (parsed from commit messages).'
-    required: false
-    default: ''
-  actor:
-    description: 'PR author login. Unused on schedule (loaded from each PR).'
-    required: false
-    default: ''
-  pr-node-id:
-    description: 'GraphQL node id. Required to arm auto-merge on pull_request.'
-    required: false
-    default: ''
-  event-name:
-    description: 'github.event_name (pull_request, pull_request_target, schedule, or workflow_dispatch).'
-    required: true
 runs:
   using: composite
   steps:
@@ -50,11 +31,6 @@ runs:
         ALLOW_MINOR: ${{ inputs.allow-minor }}
         ALLOW_MAJOR: ${{ inputs.allow-major }}
         EXEMPT_LABELS: ${{ inputs.exempt-labels }}
-        PR_LABELS: ${{ inputs.pr-labels }}
-        UPDATE_TYPE: ${{ inputs.update-type }}
-        ACTOR: ${{ inputs.actor }}
-        PR_NODE_ID: ${{ inputs.pr-node-id }}
-        EVENT_NAME: ${{ inputs.event-name }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GH_REPO: ${{ github.repository }}
       run: bash "$GITHUB_ACTION_PATH/enable.sh"

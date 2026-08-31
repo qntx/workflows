@@ -1,7 +1,6 @@
 name: Self / Dependabot
 
 on:
-  pull_request:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
@@ -12,9 +11,6 @@ permissions:
 
 jobs:
   merge:
-    if: >-
-      github.event_name != 'pull_request'
-      || github.event.pull_request.user.login == 'dependabot[bot]'
     permissions:
       contents: write
       pull-requests: write

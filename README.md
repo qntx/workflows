@@ -15,7 +15,7 @@ Hardening in every public workflow:
 - Same-repository references use `$/` with no `@ref`.
 - `actions/checkout` via `$/actions/hardened-checkout` with `persist-credentials: false` unless the job pushes.
 - Explicit `timeout-minutes` on every concrete job.
-- CI cancels in-flight runs; publish / release / deploy / ops do not.
+- CI cancels in-flight runs; publish / release / deploy / ops do not. `ops-dependabot` cancels overlapping sweeps.
 
 ## Catalogue
 
