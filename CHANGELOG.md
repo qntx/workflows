@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caller contract: `on: schedule` (`*/15 * * * *`) + `workflow_dispatch` only. Drop `pull_request` and any `dependabot[bot]`-only `if:`. Leftover PR runs skip and must not share the sweep concurrency group.
 - README: `ops-dependabot` cancels overlapping sweeps.
 - PR template: document breaks in `docs/MIGRATION.md` and `CHANGELOG.md`; no shims / no dual contracts.
+- `self-retag` force-moves annotated `vN` to `origin/main` after squash. Input `target` is deleted.
 
 ### Removed
 

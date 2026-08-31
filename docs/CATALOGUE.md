@@ -40,6 +40,6 @@ Not a consumer API. Required check-run name for this repository is `Self / CI`.
 | `self-release.yml`    | `Self / Release`    | `release`                                                                   | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
 | `self-stale.yml`      | `Self / Stale`      | `stale`                                                                     | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
 | `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                     | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
-| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Force-move `v<major>` to an existing annotated `vX.Y.Z` tag.                     |
+| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.

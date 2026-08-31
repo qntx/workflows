@@ -4,11 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       major:
-        description: 'Major digit to move (e.g. 2). Writes tag v<major>.'
-        required: true
-        type: string
-      target:
-        description: 'Existing immutable tag to point at (e.g. v2.0.0).'
+        description: 'Major digit to move (e.g. 2). Writes annotated tag v<major> at origin/main.'
         required: true
         type: string
 
@@ -23,6 +19,7 @@ jobs:
   retag:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: retag
     permissions:
       contents: write
     steps:
@@ -40,7 +37,6 @@ jobs:
         shell: bash
         env:
           MAJOR: ${{ inputs.major }}
-          TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
 
@@ -48,25 +44,21 @@ jobs:
             echo "::error::major must match ^[0-9]+$ (got ${MAJOR})"
             exit 1
           fi
-          if ! [[ "$TARGET" =~ ^v${MAJOR}\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::target must be v${MAJOR}.X.Y (got ${TARGET})"
+
+          # Dispatch ref is not origin/main. Do not peel HEAD.
+          git fetch origin main --tags --force
+
+          if ! git rev-parse --verify origin/main >/dev/null; then
+            echo "::error::origin/main is missing after fetch"
             exit 1
           fi
 
-          # Dispatch ref may not contain every tag.
-          git fetch origin --tags --force
-
-          if ! git rev-parse --verify --quiet "refs/tags/${TARGET}"; then
-            echo "::error::target tag ${TARGET} does not exist"
-            exit 1
-          fi
-
-          objtype="$(git cat-file -t "refs/tags/${TARGET}")"
-          if [ "$objtype" != tag ]; then
-            echo "::error::target ${TARGET} must be an annotated tag (got ${objtype})"
-            exit 1
-          fi
-
-          target_peeled="$(git rev-parse "${TARGET}^{commit}")"
-          git tag -f -a "v${MAJOR}" -m "track v${MAJOR}.x.x" "$target_peeled"
+          main_sha="$(git rev-parse origin/main)"
+          git tag -f -a "v${MAJOR}" -m "track origin/main" "$main_sha"
           git push -f origin "v${MAJOR}"
+
+          peeled="$(git rev-parse "v${MAJOR}^{commit}")"
+          {
+            echo "origin/main=${main_sha}"
+            echo "v${MAJOR}^{commit}=${peeled}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
