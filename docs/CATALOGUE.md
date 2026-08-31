@@ -8,25 +8,25 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 
 ## Public API
 
-| File                    | `name:`               | Job ids                        | Purpose                                                                                                   |
-| ----------------------- | --------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `ci-bun.yml`            | `CI / Bun`            | `ci`                           | Bun install / lint / typecheck / build / test. `bun-version` default `1.4`.                               |
-| `ci-foundry.yml`        | `CI / Foundry`        | `ci`                           | Forge fmt / build --sizes / test. `foundry-profile` default `ci`.                                         |
-| `ci-go.yml`             | `CI / Go`             | `ci`                           | `go mod tidy` drift, `vet`, optional golangci-lint (`golangci-lint-version` default `v2.13`), race.       |
-| `ci-node.yml`           | `CI / Node.js`        | `ci`                           | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.                       |
-| `ci-python.yml`         | `CI / Python`         | `ci`                           | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                               |
-| `ci-rust.yml`           | `CI / Rust`           | `ci`                           | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.              |
-| `publish-npm.yml`       | `Publish / npm`       | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                  |
-| `publish-pypi.yml`      | `Publish / PyPI`      | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                  |
-| `publish-crates.yml`    | `Publish / crates.io` | `publish`                      | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.                     |
-| `publish-container.yml` | `Publish / container` | `build` \| `publish` \| `push` | `build` if `push: false`. `publish` if push+attest. `push` if push and `attest: false` (`name: publish`). |
-| `release.yml`           | `Release`             | `release`                      | git-cliff changelog + GitHub Release.                                                                     |
-| `release-rust.yml`      | `Release / Rust`      | `build`, `release`             | Five-target matrix. `jobs.build.name`: `Build ${{ matrix.target }}`.                                      |
-| `deploy-pages.yml`      | `Deploy / Pages`      | `build`, `deploy`              | Bun build + Pages artifact API. `deploy` skipped on `pull_request`.                                       |
-| `deploy-mkdocs.yml`     | `Deploy / MkDocs`     | `deploy`                       | `mkdocs gh-deploy --force` (branch push, not Pages artifact).                                             |
-| `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                    |
-| `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Source or dest under `.git`/`.github` is rejected. rsync also excludes those names.        |
-| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Schedule squash-merge green Dependabot PRs. No auto-merge arm. No checkout. Caller owns `on:`.            |
+| File                    | `name:`               | Job ids                        | Purpose                                                                                                                                        |
+| ----------------------- | --------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci-bun.yml`            | `CI / Bun`            | `ci`                           | Bun install / lint / typecheck / build / test. `bun-version` default `1.4`.                                                                    |
+| `ci-foundry.yml`        | `CI / Foundry`        | `ci`                           | Forge fmt / build --sizes / test. `foundry-profile` default `ci`.                                                                              |
+| `ci-go.yml`             | `CI / Go`             | `ci`                           | `go mod tidy` drift, `vet`, optional golangci-lint (`golangci-lint-version` default `v2.13`), race.                                            |
+| `ci-node.yml`           | `CI / Node.js`        | `ci`                           | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.                                                            |
+| `ci-python.yml`         | `CI / Python`         | `ci`                           | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                                                                    |
+| `ci-rust.yml`           | `CI / Rust`           | `ci`                           | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.                                                   |
+| `publish-npm.yml`       | `Publish / npm`       | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                                                       |
+| `publish-pypi.yml`      | `Publish / PyPI`      | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                                                       |
+| `publish-crates.yml`    | `Publish / crates.io` | `publish`                      | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.                                                          |
+| `publish-container.yml` | `Publish / container` | `build` \| `publish` \| `push` | `build` if `push: false`. `publish` if push+attest. `push` if push and `attest: false` (`name: publish`).                                      |
+| `release.yml`           | `Release`             | `release`                      | git-cliff changelog + GitHub Release.                                                                                                          |
+| `release-rust.yml`      | `Release / Rust`      | `build`, `release`             | Five-target matrix. `jobs.build.name`: `Build ${{ matrix.target }}`.                                                                           |
+| `deploy-pages.yml`      | `Deploy / Pages`      | `build`, `deploy`              | Bun build + Pages artifact API. `deploy` skipped on `pull_request`.                                                                            |
+| `deploy-mkdocs.yml`     | `Deploy / MkDocs`     | `deploy`                       | `mkdocs gh-deploy --force` (branch push, not Pages artifact).                                                                                  |
+| `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                                                         |
+| `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Jail is canonical `.git` / `.github` segments after `realpath`, not worktree-root prefix only. rsync also excludes those names. |
+| `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Schedule squash-merge green Dependabot PRs. No auto-merge arm. No checkout. Caller owns `on:`.                                                 |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 

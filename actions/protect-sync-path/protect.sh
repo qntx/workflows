@@ -75,8 +75,13 @@ fi
 
 jailed() {
   local p="$1"
+  # Prefix is $root/.git / $root/.github only; nested docs/.github is not that prefix.
   [[ "$p" == "$root_abs/.git" || "$p" == "$root_abs/.git/"* ||
-    "$p" == "$root_abs/.github" || "$p" == "$root_abs/.github/"* ]]
+    "$p" == "$root_abs/.github" || "$p" == "$root_abs/.github/"* ]] && return 0
+  python3 -c 'import os, sys
+root, path = sys.argv[1], sys.argv[2]
+sys.exit(0 if any(seg in (".git", ".github") for seg in os.path.relpath(path, root).split(os.sep)) else 1)
+' "$root_abs" "$p"
 }
 
 if jailed "$src_abs" || jailed "$dst_abs"; then
