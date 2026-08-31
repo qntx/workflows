@@ -56,4 +56,5 @@ runs:
         PR_NODE_ID: ${{ inputs.pr-node-id }}
         EVENT_NAME: ${{ inputs.event-name }}
         GITHUB_REPOSITORY: ${{ github.repository }}
+        GH_REPO: ${{ github.repository }}
       run: bash "$GITHUB_ACTION_PATH/enable.sh"
