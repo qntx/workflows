@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Policy + GitHub merge. Sourced by test.sh (skip main).
+# Policy + GitHub merge. Sourced by test.sh (skip sweep).
 set -euo pipefail
 
 trim() {
@@ -31,7 +31,7 @@ print(int((now - created).total_seconds()))
 ' "$created" "$(ops_dependabot_now)" 2>/dev/null || true
 }
 
-# Highest version-update:semver-* in text, else empty.
+# Highest version-update:semver-* or version-update:lockfile-only in text, else empty.
 ops_dependabot_parse_update_type() {
   local text="$1" t best= rank=0 r
   while IFS= read -r t; do
@@ -41,13 +41,14 @@ ops_dependabot_parse_update_type() {
       version-update:semver-major) r=3 ;;
       version-update:semver-minor) r=2 ;;
       version-update:semver-patch) r=1 ;;
+      version-update:lockfile-only) r=1 ;;
       *) continue ;;
     esac
     if [ "$r" -gt "$rank" ]; then
       rank="$r"
       best="$t"
     fi
-  done < <(printf '%s\n' "$text" | grep -oE 'version-update:semver-(patch|minor|major)' || true)
+  done < <(printf '%s\n' "$text" | grep -oE 'version-update:(semver-(patch|minor|major)|lockfile-only)' || true)
   printf '%s' "$best"
 }
 
@@ -89,7 +90,7 @@ ops_dependabot_decide() {
 
   local allowed=0
   case "${UPDATE_TYPE:-}" in
-    version-update:semver-patch)
+    version-update:semver-patch | version-update:lockfile-only)
       [ "${ALLOW_PATCH:-}" = true ] && allowed=1
       ;;
     version-update:semver-minor)
@@ -197,6 +198,17 @@ ops_dependabot_evaluate() {
       ;;
   esac
 
+  case "$state" in
+    BEHIND)
+      echo 'wait:behind'
+      return 0
+      ;;
+    UNKNOWN)
+      echo 'wait:unknown'
+      return 0
+      ;;
+  esac
+
   if ! ops_dependabot_rollup_ok "$pr"; then
     echo 'wait:checks'
     return 0
@@ -205,7 +217,7 @@ ops_dependabot_evaluate() {
   if ! ops_dependabot_has_other_checks "$pr"; then
     local created age grace
     created="$(printf '%s' "$pr" | jq -r '.createdAt // empty')"
-    grace="${GRACE_SECONDS:-300}"
+    grace="${GRACE_SECONDS:-900}"
     age="$(ops_dependabot_age_seconds "$created")"
     if [ -z "$age" ] || [ "$age" -lt "$grace" ]; then
       echo 'wait:grace'
@@ -214,19 +226,6 @@ ops_dependabot_evaluate() {
   fi
 
   printf 'merge\n'
-}
-
-ops_dependabot_enable() {
-  local method
-  method="$(printf '%s' "$MERGE_METHOD" | tr '[:lower:]' '[:upper:]')"
-  if [ -z "${PR_NODE_ID:-}" ]; then
-    echo 'ops-dependabot: PR_NODE_ID is empty' >&2
-    return 2
-  fi
-  gh api graphql \
-    -f query='mutation($id:ID!,$m:PullRequestMergeMethod!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$m}){pullRequest{autoMergeRequest{enabledAt mergeMethod}}}}' \
-    -f id="$PR_NODE_ID" \
-    -f m="$method"
 }
 
 ops_dependabot_merge_now() {
@@ -267,31 +266,6 @@ ops_dependabot_merge_now() {
   done
 }
 
-ops_dependabot_arm() {
-  local out
-  if [ -z "${PR_NODE_ID:-}" ]; then
-    echo '::notice::ops-dependabot: no pull request node id; skip arm'
-    return 0
-  fi
-  if out="$(ops_dependabot_enable 2>&1)"; then
-    printf '%s\n' "$out"
-    return 0
-  fi
-  if printf '%s\n' "$out" | grep -Eqi 'already enabled'; then
-    echo '::notice::ops-dependabot: auto-merge already enabled'
-    return 0
-  fi
-  # Without required checks GitHub will not queue auto-merge (UNSTABLE while
-  # any optional check is pending, including this job). Not an error. The
-  # schedule sweep squash-merges when the rollup is actually green.
-  if printf '%s\n' "$out" | grep -Eqi 'unstable status|required protected branch rules|cannot be enabled|auto-?merge is not allowed|not enabled on this repository'; then
-    echo '::notice::ops-dependabot: cannot queue auto-merge; schedule sweep will merge when green'
-    return 0
-  fi
-  printf '%s\n' "$out"
-  return 1
-}
-
 ops_dependabot_commit_message() {
   local oid="$1"
   gh api "repos/${GITHUB_REPOSITORY}/git/commits/${oid}" --jq .message
@@ -316,10 +290,12 @@ ops_dependabot_pr_messages() {
 
 ops_dependabot_sweep_one() {
   local pr="$1" text result
+  OPS_DEPENDABOT_OUTCOME=fail
   PR_NUMBER="$(printf '%s' "$pr" | jq -r '.number // empty')"
   HEAD_OID="$(printf '%s' "$pr" | jq -r '.commits[-1].oid // empty')"
   if [ -z "$PR_NUMBER" ]; then
     echo '::notice::ops-dependabot: skip PR with empty number'
+    OPS_DEPENDABOT_OUTCOME=skip
     return 0
   fi
   text="$(ops_dependabot_pr_messages "$pr")"
@@ -327,21 +303,34 @@ ops_dependabot_sweep_one() {
   case "$result" in
     merge)
       echo "::notice::ops-dependabot: merging #${PR_NUMBER}"
-      ops_dependabot_merge_now
+      if ops_dependabot_merge_now; then
+        OPS_DEPENDABOT_OUTCOME=merge
+        return 0
+      fi
+      OPS_DEPENDABOT_OUTCOME=fail
+      return 1
       ;;
-    skip:* | wait:*)
+    skip:*)
       echo "::notice::ops-dependabot: #${PR_NUMBER} ${result}"
+      OPS_DEPENDABOT_OUTCOME=skip
+      return 0
+      ;;
+    wait:checks | wait:grace | wait:behind | wait:unknown)
+      echo "::notice::ops-dependabot: #${PR_NUMBER} ${result}"
+      OPS_DEPENDABOT_OUTCOME=$result
       return 0
       ;;
     *)
       echo "ops-dependabot: unexpected evaluate '${result}'" >&2
+      OPS_DEPENDABOT_OUTCOME=fail
       return 2
       ;;
   esac
 }
 
 ops_dependabot_sweep() {
-  local n json fail=0
+  local n json
+  local c_merge=0 c_wait_checks=0 c_wait_grace=0 c_wait_behind=0 c_wait_unknown=0 c_skip=0 c_fail=0
   if [ -z "${GITHUB_REPOSITORY:-}" ]; then
     echo 'ops-dependabot: GITHUB_REPOSITORY is empty' >&2
     return 2
@@ -351,37 +340,41 @@ ops_dependabot_sweep() {
   while IFS= read -r n; do
     [ -z "$n" ] && continue
     json="$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json number,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits)"
-    if ! ops_dependabot_sweep_one "$json"; then
-      fail=1
-    fi
+    OPS_DEPENDABOT_OUTCOME=fail
+    ops_dependabot_sweep_one "$json" || true
+    case "${OPS_DEPENDABOT_OUTCOME}" in
+      merge) c_merge=$((c_merge + 1)) ;;
+      wait:checks) c_wait_checks=$((c_wait_checks + 1)) ;;
+      wait:grace) c_wait_grace=$((c_wait_grace + 1)) ;;
+      wait:behind) c_wait_behind=$((c_wait_behind + 1)) ;;
+      wait:unknown) c_wait_unknown=$((c_wait_unknown + 1)) ;;
+      skip) c_skip=$((c_skip + 1)) ;;
+      *) c_fail=$((c_fail + 1)) ;;
+    esac
   done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --app dependabot --limit 50 --json number --jq '.[].number')
-  return "$fail"
-}
 
-ops_dependabot_main() {
-  local decision
-  case "${EVENT_NAME:-pull_request}" in
-    schedule | workflow_dispatch)
-      ops_dependabot_sweep
-      return
-      ;;
-  esac
-  decision="$(ops_dependabot_decide)"
-  case "$decision" in
-    merge)
-      ops_dependabot_arm
-      ;;
-    skip:*)
-      echo "::notice::ops-dependabot: ${decision#skip:}"
-      return 0
-      ;;
-    *)
-      echo "ops-dependabot: unexpected decision '${decision}'" >&2
-      return 2
-      ;;
-  esac
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      echo '## ops-dependabot sweep'
+      echo
+      echo '| result | count |'
+      echo '| --- | --- |'
+      echo "| merge | ${c_merge} |"
+      echo "| wait:checks | ${c_wait_checks} |"
+      echo "| wait:grace | ${c_wait_grace} |"
+      echo "| wait:behind | ${c_wait_behind} |"
+      echo "| wait:unknown | ${c_wait_unknown} |"
+      echo "| skip | ${c_skip} |"
+      echo "| fail | ${c_fail} |"
+    } >>"$GITHUB_STEP_SUMMARY"
+  fi
+
+  if [ "$c_fail" -gt 0 ]; then
+    return 1
+  fi
+  return 0
 }
 
 if [ "${OPS_DEPENDABOT_SOURCE:-}" != 1 ]; then
-  ops_dependabot_main
+  ops_dependabot_sweep
 fi

@@ -1,12 +1,8 @@
 name: Ops / Dependabot
 
-# Caller owns on:. Use both:
-#   pull_request / pull_request_target — try to queue GitHub auto-merge
-#   schedule / workflow_dispatch — squash-merge Dependabot PRs whose checks are green
-# GitHub will not queue auto-merge without required checks (UNSTABLE). This job
-# is itself a pending check, so waiting on UNSTABLE deadlocks. check_suite and
-# check_run do not trigger when the suite was created by GitHub Actions.
-# Do not checkout the PR. Does not approve.
+# Caller owns on: (schedule / workflow_dispatch). Do not checkout the PR.
+# Does not approve. Required reviews are skip:BLOCKED; this workflow never
+# merges those PRs.
 
 on:
   workflow_call:
@@ -17,7 +13,7 @@ on:
         type: string
         default: 'squash'
       allow-patch:
-        description: 'Auto-merge version-update:semver-patch.'
+        description: 'Auto-merge version-update:semver-patch and version-update:lockfile-only.'
         required: false
         type: boolean
         default: true
@@ -51,24 +47,13 @@ concurrency:
 
 jobs:
   merge:
-    if: >-
-      github.event_name == 'schedule'
-      || github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]')
-      || (github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     steps:
-      - id: meta
-        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
-        continue-on-error: true
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
-        with:
-          github-token: ${{ secrets.TOKEN || github.token }}
-
       - uses: $/actions/ops-dependabot-enable
         with:
           github-token: ${{ secrets.TOKEN || github.token }}
@@ -77,8 +62,3 @@ jobs:
           allow-minor: ${{ inputs.allow-minor }}
           allow-major: ${{ inputs.allow-major }}
           exempt-labels: ${{ inputs.exempt-labels }}
-          pr-labels: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          update-type: ${{ steps.meta.outputs.update-type }}
-          actor: ${{ github.event.pull_request.user.login }}
-          pr-node-id: ${{ github.event.pull_request.node_id }}
-          event-name: ${{ github.event_name }}

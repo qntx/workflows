@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Website URL is `.org` (#29).
+- `ops-dependabot` retries `gh pr merge` up to five times when the base branch was modified (#31).
+- `ops-dependabot` used GraphQL `enablePullRequestAutoMerge` on `pull_request` (#32), treated `UNSTABLE` as a notice (#33), and introduced a schedule sweep that squash-merges when non-self checks are green (#34). That `pull_request` arm is deleted. The composite always sweeps on `schedule` / `workflow_dispatch`.
+- `ops-dependabot` lists Dependabot PR numbers then views one PR at a time so a 50-PR `statusCheckRollup` query cannot exceed GraphQL's 500k node cap (#35).
+- `gh pr merge` uses `--repo` and does not pass `--delete-branch` (this action does not checkout) (#36).
+- `version-update:lockfile-only` is allowed when `allow-patch` is true (same rank as patch). Bare `lockfile-only` stays unhandled.
+- Empty-rollup grace is 900 seconds.
+- GraphQL `mergeStateStatus: BEHIND` waits (`wait:behind`); `UNKNOWN` waits (`wait:unknown`). `BLOCKED` stays `skip:BLOCKED`. This workflow never merges required-review PRs. No REST merge, no `--admin`.
+- Caller contract: `on: schedule` (`*/15 * * * *`) + `workflow_dispatch` only. Drop `pull_request` and any `dependabot[bot]`-only `if:`. Leftover PR runs skip and must not share the sweep concurrency group.
+- README: `ops-dependabot` cancels overlapping sweeps.
+- PR template: document breaks in `docs/MIGRATION.md` and `CHANGELOG.md`; no shims / no dual contracts.
+
+### Removed
+
+- `ops-dependabot` `pull_request` / `pull_request_target` job arm, `dependabot/fetch-metadata`, and composite inputs `pr-labels`, `update-type`, `actor`, `pr-node-id`, `event-name`.
+
+## [2.0.0] - 2026-08-28
+
 Breaking rewrite of the reusable workflow platform. No compatibility shims. Old filenames are deleted. Ops cuts annotated `v2.0.0` and retags `v2`. Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
 
 ### Removed
@@ -52,7 +72,6 @@ Breaking rewrite of the reusable workflow platform. No compatibility shims. Old 
 
 ### Added
 
-- `ops-dependabot-enable` composite: policy is tested; `pull_request` uses `enablePullRequestAutoMerge` (not `gh pr merge --auto` / `mergePullRequest`) and treats `UNSTABLE` as a no-op. `schedule` / `workflow_dispatch` squash-merges Dependabot PRs whose non-self checks are green. Does not poll inside the pull_request job.
 - `actions/publish-npm` and `actions/publish-pypi` (private). Called from mutex jobs in the public workflows.
 - `ci-rust.yml` input `deny` (default `false`) runs `cargo-deny check` when the crate has `deny.toml`.
 - `publish-npm.yml` `install-directory` (default `.`) for workspace install and lockfile cache. `working-directory` is the package that is built, tested, and published.

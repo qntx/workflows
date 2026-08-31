@@ -73,6 +73,15 @@ UPDATE_TYPE='lockfile-only'
 expect_decision 'unhandled-type' 'skip:unhandled-update-type lockfile-only'
 
 base_env
+UPDATE_TYPE='version-update:lockfile-only'
+expect_decision 'lockfile-only-as-patch' 'merge'
+
+base_env
+UPDATE_TYPE='version-update:lockfile-only'
+ALLOW_PATCH='false'
+expect_decision 'lockfile-only-disabled' 'skip:update-type-disabled version-update:lockfile-only'
+
+base_env
 ACTOR='human'
 expect_decision 'non-dependabot-actor' 'skip:actor human'
 
@@ -90,6 +99,9 @@ expect_eq 'parse-highest' "$(ops_dependabot_parse_update_type $'update-type: ver
 
 footer=$'---\nupdated-dependencies:\n- dependency-name: blake2\n  update-type: version-update:semver-minor\n...\n'
 expect_eq 'parse-footer' "$(ops_dependabot_parse_update_type "$footer")" 'version-update:semver-minor'
+
+lockfile_footer=$'---\nupdated-dependencies:\n- dependency-name: foo\n  update-type: version-update:lockfile-only\n...\n'
+expect_eq 'parse-lockfile' "$(ops_dependabot_parse_update_type "$lockfile_footer")" 'version-update:lockfile-only'
 
 expect_rollup() {
   local label="$1" json="$2" rc=0
@@ -154,20 +166,39 @@ expect_eval() {
   expect_eq "$label" "$got" "$want"
 }
 
-TEXT='update-type: version-update:semver-minor'
+# Locks ${GRACE_SECONDS:-900}: base_env then unset.
+expect_eval_default_grace() {
+  local label="$1" want="$2" pr="$3" text="$4" got now
+  now="${NOW_EPOCH:-1700000000}"
+  base_env
+  unset GRACE_SECONDS
+  NOW_EPOCH="$now"
+  got="$(ops_dependabot_evaluate "$pr" "$text")"
+  expect_eq "$label" "$got" "$want"
+}
 
-expect_eval 'eval-green' 'merge' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"SUCCESS","workflowName":"CI"}]')" "$TEXT"
+TEXT='update-type: version-update:semver-minor'
+PATCH='update-type: version-update:semver-patch'
+GREEN='[{"name":"Lint","status":"COMPLETED","conclusion":"SUCCESS","workflowName":"CI"}]'
+
+expect_eval 'eval-green' 'merge' "$(pr_base "$GREEN")" "$TEXT"
 expect_eval 'eval-pending' 'wait:checks' "$(pr_base '[{"name":"Lint","status":"IN_PROGRESS","conclusion":null,"workflowName":"CI"}]')" "$TEXT"
 expect_eval 'eval-red' 'wait:checks' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"FAILURE","workflowName":"CI"}]')" "$TEXT"
 expect_eval 'eval-major' 'skip:update-type-disabled version-update:semver-major' "$(pr_base '[]')" 'update-type: version-update:semver-major'
 expect_eval 'eval-self-only-young' 'wait:grace' "$(pr_base '[{"name":"merge / merge","status":"COMPLETED","conclusion":"FAILURE","workflowName":"Dependabot"}]')" "$TEXT"
 
-# createdAt 2023-11-14T22:08:20Z == epoch 1700000000. Age 0 with NOW_EPOCH. No other checks → grace.
+# createdAt 2023-11-14T22:13:20Z == epoch 1700000000. Age 0 with NOW_EPOCH. No other checks → grace.
 expect_eval 'eval-no-checks-young' 'wait:grace' "$(pr_base '[]')" "$TEXT"
 
 NOW_EPOCH=1700000400
 expect_eval 'eval-no-checks-old' 'merge' "$(pr_base '[]')" "$TEXT"
 expect_eval 'eval-self-only-old' 'merge' "$(pr_base '[{"name":"merge / merge","status":"COMPLETED","conclusion":"FAILURE","workflowName":"Dependabot"}]')" "$TEXT"
+
+NOW_EPOCH=1700000400
+expect_eval_default_grace 'eval-default-grace-young' 'wait:grace' "$(pr_base '[]')" "$PATCH"
+
+NOW_EPOCH=1700000900
+expect_eval_default_grace 'eval-default-grace-old' 'merge' "$(pr_base '[]')" "$PATCH"
 
 draft="$(printf '%s' "$(pr_base '[]')" | jq '.isDraft=true')"
 expect_eval 'eval-draft' 'skip:draft' "$draft" "$TEXT"
@@ -175,8 +206,20 @@ expect_eval 'eval-draft' 'skip:draft' "$draft" "$TEXT"
 conflict="$(printf '%s' "$(pr_base '[]')" | jq '.mergeable="CONFLICTING"')"
 expect_eval 'eval-conflicts' 'skip:conflicts' "$conflict" "$TEXT"
 
-human="$(printf '%s' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"SUCCESS","workflowName":"CI"}]')" | jq '.author.login="octocat"')"
+human="$(printf '%s' "$(pr_base "$GREEN")" | jq '.author.login="octocat"')"
 expect_eval 'eval-human' 'skip:actor octocat' "$human" "$TEXT"
+
+behind="$(printf '%s' "$(pr_base "$GREEN")" | jq '.mergeStateStatus="BEHIND"')"
+expect_eval 'eval-behind' 'wait:behind' "$behind" "$PATCH"
+
+unknown="$(printf '%s' "$(pr_base "$GREEN")" | jq '.mergeStateStatus="UNKNOWN"')"
+expect_eval 'eval-unknown' 'wait:unknown' "$unknown" "$PATCH"
+
+blocked="$(printf '%s' "$(pr_base "$GREEN")" | jq '.mergeStateStatus="BLOCKED"')"
+expect_eval 'eval-blocked' 'skip:BLOCKED' "$blocked" "$PATCH"
+
+behind_major="$(printf '%s' "$(pr_base "$GREEN")" | jq '.mergeStateStatus="BEHIND"')"
+expect_eval 'eval-behind-major-disabled' 'skip:update-type-disabled version-update:semver-major' "$behind_major" 'update-type: version-update:semver-major'
 
 if [ "$fail" -ne 0 ]; then
   echo 'ops-dependabot-enable tests failed'

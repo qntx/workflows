@@ -57,3 +57,10 @@ gh search code --owner qntx 'qntx/workflows/.github/workflows' --limit 200
 ```
 
 Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-stale.yml`, `stale.yml@`, `repo-sync-folder.yml`, `gen-openapi`.
+
+## Post-v2.0.0 (`ops-dependabot`)
+
+1. Drop `pull_request` / `pull_request_target` from `on:`.
+2. Add `schedule` (`*/15 * * * *`) if the caller only had a PR event.
+3. Drop any `dependabot[bot]`-only job `if:` (schedule actor is not Dependabot; that `if:` skips the sweep on current `@v2`).
+4. Leftover PR runs skip and must not share the sweep concurrency group (`…-${{ github.event.pull_request.number || 'sweep' }}` stays in the callee).
