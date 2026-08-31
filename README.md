@@ -71,13 +71,13 @@ Publish job id is `publish`. `publish-container.yml` splits mutually exclusive `
 
 Do not `uses:` these from other repositories.
 
-| Workflow              | Purpose                                               |
-| --------------------- | ----------------------------------------------------- |
-| `self-ci.yml`         | actionlint, zizmor, pinact, format, composite tests.  |
-| `self-release.yml`    | Annotated `v*.*.*` tags → `release.yml`.              |
-| `self-stale.yml`      | This repository's stale cron.                         |
-| `self-dependabot.yml` | Auto-merge this repository's Dependabot PRs.          |
-| `self-retag.yml`      | Force-move `v<major>` onto an existing immutable tag. |
+| Workflow              | Purpose                                                                 |
+| --------------------- | ----------------------------------------------------------------------- |
+| `self-ci.yml`         | actionlint, zizmor, pinact, format, composite tests.                    |
+| `self-release.yml`    | Annotated `v*.*.*` tags → `release.yml`.                                |
+| `self-stale.yml`      | This repository's stale cron.                                           |
+| `self-dependabot.yml` | Auto-merge this repository's Dependabot PRs.                            |
+| `self-retag.yml`      | Post-squash operator: force-move annotated `v<major>` to `origin/main`. |
 
 ## Usage
 
