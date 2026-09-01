@@ -2,7 +2,7 @@ name: ops-dependabot-enable
 description: Squash-merge green Dependabot PRs on a schedule sweep.
 inputs:
   github-token:
-    description: 'Token for gh (contents + pull-requests write).'
+    description: 'Token for gh (contents + pull-requests write; checks + actions read).'
     required: true
   merge-method:
     description: 'squash, merge, or rebase.'

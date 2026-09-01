@@ -8,10 +8,14 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  actions: read
 
 jobs:
   merge:
     permissions:
       contents: write
       pull-requests: write
+      checks: read
+      actions: read
     uses: $/.github/workflows/ops-dependabot.yml

@@ -221,6 +221,95 @@ expect_eval 'eval-blocked' 'skip:BLOCKED' "$blocked" "$PATCH"
 behind_major="$(printf '%s' "$(pr_base "$GREEN")" | jq '.mergeStateStatus="BEHIND"')"
 expect_eval 'eval-behind-major-disabled' 'skip:update-type-disabled version-update:semver-major' "$behind_major" 'update-type: version-update:semver-major'
 
+err_rollup='GraphQL: Resource not accessible by integration (repository.pullRequest.statusCheckRollup.nodes.0.commit.statusCheckRollup)'
+err_workflow='GraphQL: Resource not accessible by integration (repository.pullRequest.statusCheckRollup.nodes.0.commit.statusCheckRollup.contexts.nodes.0.checkSuite.workflowRun)'
+err_status='GraphQL: Resource not accessible by integration (repository.pullRequest.statusCheckRollup.nodes.0.commit.statusCheckRollup.contexts.nodes.0.StatusContext)'
+err_merged='Pull request is already merged'
+err_generic='GraphQL: Resource not accessible by integration (repository.issues)'
+
+expect_forbidden() {
+  local label="$1" err="$2"
+  if ops_dependabot_is_rollup_forbidden "$err"; then
+    echo "ok ${label}"
+  else
+    echo "FAIL ${label}: expected true"
+    fail=1
+  fi
+}
+
+expect_not_forbidden() {
+  local label="$1" err="$2"
+  if ops_dependabot_is_rollup_forbidden "$err"; then
+    echo "FAIL ${label}: expected false"
+    fail=1
+  else
+    echo "ok ${label}"
+  fi
+}
+
+expect_forbidden 'forbidden-rollup' "$err_rollup"
+expect_forbidden 'forbidden-workflow' "$err_workflow"
+expect_forbidden 'forbidden-status' "$err_status"
+expect_not_forbidden 'forbidden-merged' "$err_merged"
+expect_not_forbidden 'forbidden-empty' ''
+expect_not_forbidden 'forbidden-generic' "$err_generic"
+
+expect_eq 'scope-rollup' "$(ops_dependabot_forbidden_scope "$err_rollup")" 'checks'
+expect_eq 'scope-workflow' "$(ops_dependabot_forbidden_scope "$err_workflow")" 'actions'
+expect_eq 'scope-status' "$(ops_dependabot_forbidden_scope "$err_status")" 'statuses'
+
+viewed="$(mktemp)"
+merged="$(mktemp)"
+pr12="$(printf '%s' "$(pr_base "$GREEN")" | jq --arg t "$PATCH" '.number=12 | .body=$t | .commits[0].messageBody=$t')"
+base_env
+GITHUB_REPOSITORY='owner/repo'
+unset GITHUB_STEP_SUMMARY
+gh() {
+  local n
+  case "${1:-} ${2:-}" in
+    'pr list')
+      printf '16\n12\n'
+      return 0
+      ;;
+    'pr view')
+      n="${3:-}"
+      printf '%s\n' "$n" >>"$viewed"
+      if [ "$n" = 16 ]; then
+        echo "$err_rollup" >&2
+        return 1
+      fi
+      if [ "$n" = 12 ]; then
+        printf '%s\n' "$pr12"
+        return 0
+      fi
+      echo "ops-dependabot-test: unexpected pr view ${n}" >&2
+      return 1
+      ;;
+    'pr merge')
+      printf '%s\n' "$*" >>"$merged"
+      return 0
+      ;;
+    *)
+      echo "ops-dependabot-test: unexpected gh $*" >&2
+      return 1
+      ;;
+  esac
+}
+
+set +e
+ops_dependabot_sweep
+sweep_rc=$?
+set -e
+expect_eq 'sweep-403-rc' "$sweep_rc" '1'
+expect_eq 'sweep-viewed' "$(xargs echo <"$viewed")" '16 12'
+if awk '{print $NF}' "$merged" | grep -qx 12; then
+  echo 'ok sweep-merged-12'
+else
+  echo 'FAIL sweep-merged-12: expected merge of #12'
+  fail=1
+fi
+rm -f "$viewed" "$merged"
+
 if [ "$fail" -ne 0 ]; then
   echo 'ops-dependabot-enable tests failed'
   exit 1

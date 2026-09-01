@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty-rollup grace is 900 seconds.
 - GraphQL `mergeStateStatus: BEHIND` waits (`wait:behind`); `UNKNOWN` waits (`wait:unknown`). `BLOCKED` stays `skip:BLOCKED`. This workflow never merges required-review PRs. No REST merge, no `--admin`.
 - Caller contract: `on: schedule` (`*/15 * * * *`) + `workflow_dispatch` only. Drop `pull_request` and any `dependabot[bot]`-only `if:`. Leftover PR runs skip and must not share the sweep concurrency group.
+- `ops-dependabot` permission contract: `checks: read` + `actions: read` on caller and callee. Private callers schedule `0 */6 * * *`. `statusCheckRollup` GraphQL 403 remains fail and continues later PRs.
 - README: `ops-dependabot` cancels overlapping sweeps.
 - PR template: document breaks in `docs/MIGRATION.md` and `CHANGELOG.md`; no shims / no dual contracts.
 - `self-retag` force-moves annotated `vN` to `origin/main` after squash. Input `target` is deleted.

@@ -40,6 +40,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  actions: read
 
 concurrency:
   group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.event.pull_request.number || 'sweep' }}
@@ -53,6 +55,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      checks: read
+      actions: read
     steps:
       - uses: $/actions/ops-dependabot-enable
         with:

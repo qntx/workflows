@@ -328,30 +328,61 @@ ops_dependabot_sweep_one() {
   esac
 }
 
+ops_dependabot_is_rollup_forbidden() {
+  printf '%s' "$1" | grep -Fq 'Resource not accessible by integration' \
+    && printf '%s' "$1" | grep -Fq 'statusCheckRollup'
+}
+
+ops_dependabot_forbidden_scope() {
+  case "$1" in
+    *StatusContext* | *statusContext*) printf 'statuses\n' ;;
+    *workflowRun*) printf 'actions\n' ;;
+    *) printf 'checks\n' ;;
+  esac
+}
+
 ops_dependabot_sweep() {
-  local n json
+  local n json errfile err scope
   local c_merge=0 c_wait_checks=0 c_wait_grace=0 c_wait_behind=0 c_wait_unknown=0 c_skip=0 c_fail=0
   if [ -z "${GITHUB_REPOSITORY:-}" ]; then
     echo 'ops-dependabot: GITHUB_REPOSITORY is empty' >&2
     return 2
   fi
+  errfile="$(mktemp)"
+  trap "rm -f '$errfile'" EXIT
   # Do not list statusCheckRollup/commits in one GraphQL query: 50 PRs exceeds
   # GitHub's 500k node cap. Number-only list, then one view per PR.
   while IFS= read -r n; do
     [ -z "$n" ] && continue
-    json="$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json number,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits)"
-    OPS_DEPENDABOT_OUTCOME=fail
-    ops_dependabot_sweep_one "$json" || true
-    case "${OPS_DEPENDABOT_OUTCOME}" in
-      merge) c_merge=$((c_merge + 1)) ;;
-      wait:checks) c_wait_checks=$((c_wait_checks + 1)) ;;
-      wait:grace) c_wait_grace=$((c_wait_grace + 1)) ;;
-      wait:behind) c_wait_behind=$((c_wait_behind + 1)) ;;
-      wait:unknown) c_wait_unknown=$((c_wait_unknown + 1)) ;;
-      skip) c_skip=$((c_skip + 1)) ;;
-      *) c_fail=$((c_fail + 1)) ;;
-    esac
+    if json="$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" \
+        --json number,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits \
+        2>"$errfile")"; then
+      OPS_DEPENDABOT_OUTCOME=fail
+      ops_dependabot_sweep_one "$json" || true
+      case "${OPS_DEPENDABOT_OUTCOME}" in
+        merge) c_merge=$((c_merge + 1)) ;;
+        wait:checks) c_wait_checks=$((c_wait_checks + 1)) ;;
+        wait:grace) c_wait_grace=$((c_wait_grace + 1)) ;;
+        wait:behind) c_wait_behind=$((c_wait_behind + 1)) ;;
+        wait:unknown) c_wait_unknown=$((c_wait_unknown + 1)) ;;
+        skip) c_skip=$((c_skip + 1)) ;;
+        *) c_fail=$((c_fail + 1)) ;;
+      esac
+    else
+      err="$(cat "$errfile")"
+      if ops_dependabot_is_rollup_forbidden "$err"; then
+        scope="$(ops_dependabot_forbidden_scope "$err")"
+        echo "ops-dependabot: #${n} GraphQL 403 on statusCheckRollup (need ${scope}: read); grant checks: read, actions: read (and statuses: read iff the path names StatusContext) on the caller job and the callee (workflow_call token is the intersection)" >&2
+        echo "ops-dependabot: #${n} ${err}" >&2
+      else
+        echo "ops-dependabot: #${n} gh pr view failed: ${err}" >&2
+      fi
+      c_fail=$((c_fail + 1))
+      continue
+    fi
   done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --app dependabot --limit 50 --json number --jq '.[].number')
+
+  rm -f "$errfile"
 
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     {
