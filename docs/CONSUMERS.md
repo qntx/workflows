@@ -186,29 +186,47 @@ secrets:
 ## Ops / Dependabot
 
 ```yaml
+# public
 on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+```
+
+```yaml
+# private
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+```
+
+```yaml
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  actions: read
 jobs:
   merge:
     permissions:
       contents: write
       pull-requests: write
+      checks: read
+      actions: read
     uses: qntx/workflows/.github/workflows/ops-dependabot.yml@v2
 ```
 
-Caller owns `on:`. `ops-dependabot.yml` has no cron. Do not add a checkout step on the caller job. Nested `uses:` jobs must not set `timeout-minutes`, `runs-on`, or `steps`. No `if:` on the caller job.
+Caller owns `on:`. `ops-dependabot.yml` has no cron and does not encode visibility. Do not add a checkout step on the caller job. Nested `uses:` jobs must not set `timeout-minutes`, `runs-on`, or `steps`. No `if:` on the caller job.
 
 `schedule` (and `workflow_dispatch`) lists open Dependabot PRs and squash-merges those whose other checks are green. Empty non-self rollup after 900s means the repo has no PR CI; then it merges. Does **not** approve.
+
+`statusCheckRollup` GraphQL 403 is fail until callers grant `checks: read` and `actions: read` on the caller job (GitHub intersects with the callee). Later PRs in the same sweep still run.
 
 Rulesets that require reviews mean this workflow never merges those PRs (`skip:BLOCKED`). GraphQL `mergeStateStatus` is actor-agnostic. Do not pass `--admin` and do not call REST `PUT /pulls/{n}/merge`. Merge by hand, or stop requiring reviews for Dependabot.
 
 Leftover caller `pull_request` / `pull_request_target` skips the job. That run must not share the sweep concurrency group; the callee keeps `…-${{ github.event.pull_request.number || 'sweep' }}`.
 
-Defaults: squash; `semver-patch`, `version-update:lockfile-only`, and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`. `TOKEN` is only for when `github.token` cannot merge (branch allowlist that excludes `GITHUB_TOKEN`), not for reviews.
+Defaults: squash; `semver-patch`, `version-update:lockfile-only`, and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`. `TOKEN` is only for when `github.token` cannot merge (branch allowlist that excludes `GITHUB_TOKEN`), not for reviews. If used, `TOKEN` needs `contents` + `pull-requests` write and `checks` + `actions` read.
 
 Secret id is `TOKEN`.
