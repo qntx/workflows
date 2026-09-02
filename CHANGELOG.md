@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
 - `scorecard` checkout is `$/actions/hardened-checkout`.
 
+### Added
+
+- `stale.yml` and `repo-stale.yml` compatibility aliases. `workflow_call` only; they forward to `ops-stale.yml` so unmigrated `@main` callers (qntx-labs) stop failing on a missing file. New callers still use `ops-stale.yml@v2`.
+
 ### Removed
 
 - `ops-dependabot` `pull_request` / `pull_request_target` job arm, `dependabot/fetch-metadata`, and composite inputs `pr-labels`, `update-type`, `actor`, `pr-node-id`, `event-name`.

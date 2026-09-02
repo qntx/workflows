@@ -172,7 +172,7 @@ permissions:
   pull-requests: write
 ```
 
-The caller owns `schedule`. `ops-stale.yml` has no cron.
+The caller owns `schedule`. `ops-stale.yml` has no cron. `stale.yml` and `repo-stale.yml` are compatibility aliases that forward to `ops-stale.yml` for unmigrated `@main` callers.
 
 ## Ops / Sync
 

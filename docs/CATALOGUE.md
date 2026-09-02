@@ -43,3 +43,12 @@ Not a consumer API. Required check-run name for this repository is `Self / CI`.
 | `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.
+
+## Compatibility aliases
+
+Not a public API. Do not pin new callers here.
+
+| File             | Forwards to     | Why it exists                                                                                          |
+| ---------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
+| `stale.yml`      | `ops-stale.yml` | Unmigrated `uses: …/stale.yml@main` (qntx-labs). Missing file made those scheduled runs fail and mail. |
+| `repo-stale.yml` | `ops-stale.yml` | Same for `uses: …/repo-stale.yml@main`.                                                                |
