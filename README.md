@@ -61,11 +61,13 @@ Publish job id is `publish`. `publish-container.yml` splits mutually exclusive `
 
 ### Ops
 
-| Workflow             | Purpose                                                            |
-| -------------------- | ------------------------------------------------------------------ |
-| `ops-stale.yml`      | `actions/stale`. `workflow_call` only; the caller owns `schedule`. |
-| `ops-sync.yml`       | Mirror a folder from another repository. Secret `SYNC_TOKEN`.      |
-| `ops-dependabot.yml` | Schedule squash-merge when green. No auto-merge arm.               |
+| Workflow             | Purpose                                                                 |
+| -------------------- | ----------------------------------------------------------------------- |
+| `ops-stale.yml`      | `actions/stale`. `workflow_call` only; the caller owns `schedule`.      |
+| `stale.yml`          | Compatibility alias → `ops-stale.yml`. Unmigrated `@main` callers only. |
+| `repo-stale.yml`     | Compatibility alias → `ops-stale.yml`. Unmigrated `@main` callers only. |
+| `ops-sync.yml`       | Mirror a folder from another repository. Secret `SYNC_TOKEN`.           |
+| `ops-dependabot.yml` | Schedule squash-merge when green. No auto-merge arm.                    |
 
 ### This repository only
 

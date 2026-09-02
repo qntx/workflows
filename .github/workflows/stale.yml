@@ -1,0 +1,57 @@
+# Compatibility alias. Not a public API.
+# Unmigrated callers still `uses: qntx/workflows/.github/workflows/stale.yml@main`.
+# This file only exists so those runs resolve instead of failing and mailing.
+# New callers use ops-stale.yml@v2. Do not add behavior here; forward only.
+name: Ops / Stale
+
+on:
+  workflow_call:
+    inputs:
+      days-before-issue-stale:
+        description: 'Days of inactivity before an issue is marked stale.'
+        required: false
+        type: number
+        default: 30
+      days-before-pr-stale:
+        description: 'Days of inactivity before a PR is marked stale.'
+        required: false
+        type: number
+        default: 45
+      days-before-issue-close:
+        description: 'Days after stale before an issue is closed.'
+        required: false
+        type: number
+        default: 5
+      days-before-pr-close:
+        description: 'Days after stale before a PR is closed.'
+        required: false
+        type: number
+        default: 10
+      only-labels:
+        description: 'Comma-separated labels required for items to be considered. Empty means no filter (default).'
+        required: false
+        type: string
+        default: ''
+      exempt-labels:
+        description: 'Comma-separated labels that exempt items from being marked stale.'
+        required: false
+        type: string
+        default: 'awaiting-approval,work-in-progress'
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    permissions:
+      issues: write
+      pull-requests: write
+    uses: $/.github/workflows/ops-stale.yml
+    with:
+      days-before-issue-stale: ${{ inputs.days-before-issue-stale }}
+      days-before-pr-stale: ${{ inputs.days-before-pr-stale }}
+      days-before-issue-close: ${{ inputs.days-before-issue-close }}
+      days-before-pr-close: ${{ inputs.days-before-pr-close }}
+      only-labels: ${{ inputs.only-labels }}
+      exempt-labels: ${{ inputs.exempt-labels }}

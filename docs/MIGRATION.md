@@ -48,7 +48,9 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 
 ## Deleted names (not restored)
 
-`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-stale.yml`, `stale.yml`, `repo-sync-folder.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
+`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
+
+`stale.yml` and `repo-stale.yml` exist again as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not fail. They are not the public API. New callers still use `ops-stale.yml@v2`.
 
 ## Post-cutover scan
 
@@ -56,7 +58,7 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 gh search code --owner qntx 'qntx/workflows/.github/workflows' --limit 200
 ```
 
-Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-stale.yml`, `stale.yml@`, `repo-sync-folder.yml`, `gen-openapi`.
+Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `gen-openapi`.
 
 ## Post-v2.0.0 (`ops-dependabot`)
 
