@@ -61,7 +61,7 @@ Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `containe
 ## Post-v2.0.0 (`ops-dependabot`)
 
 1. Drop `pull_request` / `pull_request_target` from `on:`.
-2. Add `schedule` if the caller only had a PR event. Public: `*/15 * * * *`. Private: `0 */6 * * *`.
+2. Add `schedule` if the caller only had a PR event. Daily: `0 4 * * *` (04:00 UTC).
 3. Drop any `dependabot[bot]`-only job `if:` (schedule actor is not Dependabot; that `if:` skips the sweep on current `@v2`).
 4. Leftover PR runs skip and must not share the sweep concurrency group (`…-${{ github.event.pull_request.number || 'sweep' }}` stays in the callee).
 5. Add `checks: read` and `actions: read` on the caller workflow and `jobs.merge` (GitHub intersects with the callee). Rollup 403 is fail until those scopes are granted.

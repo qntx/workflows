@@ -1,13 +1,13 @@
 # Caller owns on:. Pin at @v2.
 # schedule / workflow_dispatch squash-merge green Dependabot PRs.
-# Public cron */15. Private callers use 0 */6 * * *.
+# Daily cron 0 4 * * * (04:00 UTC).
 # Do not checkout the PR. This workflow does not approve.
 # Required reviews mean this workflow never merges those PRs (skip:BLOCKED).
 name: Dependabot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 permissions:
