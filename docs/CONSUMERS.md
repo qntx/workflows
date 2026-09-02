@@ -186,18 +186,9 @@ secrets:
 ## Ops / Dependabot
 
 ```yaml
-# public
 on:
   schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
-```
-
-```yaml
-# private
-on:
-  schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 ```
 
