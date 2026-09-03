@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `publish-pypi` checks the dist with `uvx twine` instead of `uv pip install --system twine`, which fails on PEP 668 externally-managed CPython from `setup-uv`.
+- `publish-pypi` uploads with `uv publish` instead of `pypa/gh-action-pypi-publish`. Nested Docker actions resolve to `ghcr.io/qntx/workflows:<sha>` and 403.
 
 ### Added
 
