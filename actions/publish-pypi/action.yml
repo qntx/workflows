@@ -39,16 +39,16 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         UV_PUBLISH_TOKEN: ${{ env.PYPI_TOKEN }}
-        UV_PUBLISH_URL: ${{ inputs.repository-url }}
         ATTESTATIONS: ${{ inputs.attestations }}
+        REPOSITORY_URL: ${{ inputs.repository-url }}
       run: |
         set -euo pipefail
         extra=()
         if [ -z "${UV_PUBLISH_TOKEN:-}" ]; then
           extra+=(--trusted-publishing always)
         fi
-        if [ -n "${UV_PUBLISH_URL:-}" ]; then
-          extra+=(--publish-url "$UV_PUBLISH_URL")
+        if [ -n "${REPOSITORY_URL:-}" ]; then
+          extra+=(--publish-url "$REPOSITORY_URL")
         fi
         if [ "${ATTESTATIONS}" != "true" ]; then
           extra+=(--no-attestations)
