@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
 - `scorecard` checkout is `$/actions/hardened-checkout`.
 
+### Fixed
+
+- `publish-pypi` checks the dist with `uvx twine` instead of `uv pip install --system twine`, which fails on PEP 668 externally-managed CPython from `setup-uv`.
+
 ### Added
 
 - `stale.yml` and `repo-stale.yml` compatibility aliases. `workflow_call` only; they forward to `ops-stale.yml` so unmigrated `@main` callers (qntx-labs) stop failing on a missing file. New callers still use `ops-stale.yml@v2`.
