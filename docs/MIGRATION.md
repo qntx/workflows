@@ -58,7 +58,7 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 gh search code --owner qntx 'qntx/workflows/.github/workflows' --limit 200
 ```
 
-Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `gen-openapi`.
+Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `gen-openapi`, `ops-docs-fan-in.yml`.
 
 ## Post-v2.0.0 (`ops-dependabot`)
 

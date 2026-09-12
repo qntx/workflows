@@ -10,7 +10,3 @@ paths:
     ignore:
       - 'property "workflow_sha" is not defined in object type'
       - 'property "workflow_repository" is not defined in object type'
-  .github/workflows/ops-docs-fan-in.yml:
-    ignore:
-      - 'property "workflow_sha" is not defined in object type'
-      - 'property "workflow_repository" is not defined in object type'

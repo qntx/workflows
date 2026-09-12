@@ -154,7 +154,7 @@ jobs:
     permissions:
       contents: read
     with:
-      docs-path: scripts/fixtures/valid-docs
+      docs-path: actions/validate-docs-tree/fixtures/valid-docs
 
   scorecard:
     runs-on: ubuntu-latest
