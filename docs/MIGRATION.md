@@ -48,9 +48,21 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 
 ## Deleted names (not restored)
 
-`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
+`python.yml`, `python-publish.yml`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `gen-openapi-client.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `stale.yml`, `repo-stale.yml`, plus historical `bun.yml`, `c-cpp.yml`, `foundry.yml`, `go.yml`, `node.js.yml`, `dart.yml`, `npm-publish.yml`, `bun-publish.yml`, `rust.yml`, `rust-publish.yml`, `rust-cd.yml`, `github-pages.yml`, `sync-repo-folder.yml`.
 
-`stale.yml` and `repo-stale.yml` exist again as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not fail. They are not the public API. New callers still use `ops-stale.yml@v2`.
+The #45 `stale.yml` / `repo-stale.yml` forwards are gone. Mapping remains `stale.yml@main` / `repo-stale.yml@main` → `ops-stale.yml@v2`. qntx-labs `@main` 404 is accepted (they already 404 on other v1 names).
+
+## Docs validator CLI (fan-in / local)
+
+`ci-docs.yml` caller YAML is unchanged. Programmatic use is the CLI, not `import()`:
+
+```bash
+cd actions/validate-docs-tree
+bun install --frozen-lockfile
+bun validate-docs-tree.ts "$docsDir" --lint
+```
+
+Do not `bun install` at the workflows root for the validator. `--lint` loads sibling `docs-tree.markdownlint.jsonc`. `MARKDOWNLINT_CONFIG` is not read. Absolute `<docs-dir>` is allowed (fan-in tmp).
 
 ## Docs validator CLI (fan-in / local)
 
@@ -70,7 +82,7 @@ Do not `bun install` at the workflows root for the validator. `--lint` loads sib
 gh search code --owner qntx 'qntx/workflows/.github/workflows' --limit 200
 ```
 
-Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `gen-openapi`, `ops-docs-fan-in.yml`.
+Must not reappear: `python.yml@`, `docker.yml`, `publish-npm-bun.yml`, `container-build.yml`, `ci-cpp.yml`, `ci-dart.yml`, `repo-sync-folder.yml`, `gen-openapi`, `ops-docs-fan-in.yml`, `stale.yml@`, `repo-stale.yml@`.
 
 ## Post-v2.0.0 (`ops-dependabot`)
 
