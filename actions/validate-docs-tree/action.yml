@@ -7,5 +7,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - run: bun "${{ github.action_path }}/validate-docs-tree.ts" "${{ inputs.docs-path }}" --lint
+    - env:
+        ACTION_PATH: ${{ github.action_path }}
+        DOCS_PATH: ${{ inputs.docs-path }}
+      run: bun "$ACTION_PATH/validate-docs-tree.ts" "$DOCS_PATH" --lint
       shell: bash
