@@ -1,10 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateDocsTree } from './validate-docs-tree';
+import { resolveDocsRoot, validateDocsTree } from './validate-docs-tree';
 
 const lintConfig = resolve(import.meta.dir, 'docs-tree.markdownlint.jsonc');
+const cli = resolve(import.meta.dir, 'validate-docs-tree.ts');
 const temps: string[] = [];
 
 function tree(files: Record<string, string>): string {
@@ -17,6 +25,20 @@ function tree(files: Record<string, string>): string {
     writeFileSync(p, body);
   }
   return dir;
+}
+
+function runCli(
+  args: string[],
+  extraEnv: Record<string, string | undefined> = {},
+) {
+  const env = { ...process.env, ...extraEnv };
+  for (const [k, v] of Object.entries(extraEnv)) {
+    if (v === undefined) delete env[k];
+  }
+  return spawnSync(process.execPath, [cli, ...args], {
+    encoding: 'utf8',
+    env,
+  });
 }
 
 afterEach(() => {
@@ -276,5 +298,215 @@ untagged
       if (prev === undefined) delete process.env.MARKDOWNLINT_CLI2;
       else process.env.MARKDOWNLINT_CLI2 = prev;
     }
+  });
+});
+
+describe('resolveDocsRoot', () => {
+  test("('.', 'docs') under a temp workspace is ok", () => {
+    const ws = tree({ 'docs/index.mdx': okPage, 'docs/meta.json': okMeta });
+    const r = resolveDocsRoot(ws, '.', 'docs');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.root).toBe(realpathSync(join(ws, 'docs')));
+  });
+
+  test('nested relative docs-path is ok', () => {
+    const rel = 'actions/validate-docs-tree/fixtures/valid-docs';
+    const ws = tree({
+      [`${rel}/index.mdx`]: okPage,
+      [`${rel}/meta.json`]: okMeta,
+    });
+    const r = resolveDocsRoot(ws, '.', rel);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.root).toBe(realpathSync(join(ws, rel)));
+  });
+
+  test('absolute docs-path fails', () => {
+    const ws = tree({ 'docs/index.mdx': okPage });
+    const r = resolveDocsRoot(ws, '.', '/etc');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('relative'))).toBe(true);
+  });
+
+  test('.. in either input fails', () => {
+    const ws = tree({ 'docs/index.mdx': okPage });
+    const wd = resolveDocsRoot(ws, '..', 'docs');
+    const docs = resolveDocsRoot(ws, '.', '../docs');
+    const nested = resolveDocsRoot(ws, 'foo/../docs', 'docs');
+    expect(wd.ok).toBe(false);
+    expect(docs.ok).toBe(false);
+    expect(nested.ok).toBe(false);
+  });
+
+  test('joined path outside workspace fails', () => {
+    const ws = tree({});
+    const outside = tree({ 'index.mdx': okPage });
+    symlinkSync(outside, join(ws, 'docs'));
+    const r = resolveDocsRoot(ws, '.', 'docs');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('escapes'))).toBe(true);
+  });
+
+  test('missing directory is ok:false and does not throw', () => {
+    const ws = tree({});
+    let r: ReturnType<typeof resolveDocsRoot> | undefined;
+    expect(() => {
+      r = resolveDocsRoot(ws, '.', 'docs');
+    }).not.toThrow();
+    expect(r?.ok).toBe(false);
+    if (r && !r.ok)
+      expect(r.errors.some((e) => e.includes('docs tree missing'))).toBe(true);
+  });
+
+  test('file instead of directory is ok:false and does not throw', () => {
+    const ws = tree({ docs: 'not a directory\n' });
+    let r: ReturnType<typeof resolveDocsRoot> | undefined;
+    expect(() => {
+      r = resolveDocsRoot(ws, '.', 'docs');
+    }).not.toThrow();
+    expect(r?.ok).toBe(false);
+    if (r && !r.ok)
+      expect(r.errors.some((e) => e.includes('docs tree missing'))).toBe(true);
+  });
+
+  test('empty inputs normalize to . / docs', () => {
+    const ws = tree({ 'docs/index.mdx': okPage, 'docs/meta.json': okMeta });
+    const r = resolveDocsRoot(ws, '', '');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.root).toBe(realpathSync(join(ws, 'docs')));
+  });
+
+  test('symlink workspace is followed, not rejected', () => {
+    const real = tree({
+      'docs/index.mdx': okPage,
+      'docs/meta.json': okMeta,
+    });
+    const link = join(tmpdir(), `docs-validate-${crypto.randomUUID()}`);
+    symlinkSync(real, link);
+    temps.push(link);
+    const r = resolveDocsRoot(link, '.', 'docs');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.root).toBe(realpathSync(join(real, 'docs')));
+  });
+});
+
+describe('frontmatter YAML', () => {
+  test('full: "true" (quoted string) is accepted', () => {
+    const dir = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: Index
+description: Quoted full is a string.
+full: "true"
+---
+
+Hi.
+`,
+    });
+    const r = validateDocsTree(dir);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  test('invalid YAML in --- block is frontmatter required', () => {
+    const dir = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: [unclosed
+description: Broken.
+---
+
+Hi.
+`,
+    });
+    const r = validateDocsTree(dir);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes('frontmatter required'))).toBe(true);
+  });
+
+  test('extra keys are ignored', () => {
+    const dir = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: Index
+description: Extra keys are ignored.
+sidebar: false
+---
+
+Hi.
+`,
+    });
+    const r = validateDocsTree(dir);
+    expect(r.errors).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  test('title and description must be non-empty strings', () => {
+    const emptyTitle = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: ""
+description: Empty title.
+---
+
+Hi.
+`,
+    });
+    const numberTitle = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: 1
+description: Numeric title.
+---
+
+Hi.
+`,
+    });
+    const missingDesc = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: Index
+---
+
+Hi.
+`,
+    });
+    const numberDesc = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: Index
+description: 1
+---
+
+Hi.
+`,
+    });
+    expect(validateDocsTree(emptyTitle).ok).toBe(false);
+    expect(validateDocsTree(numberTitle).ok).toBe(false);
+    expect(validateDocsTree(missingDesc).ok).toBe(false);
+    expect(validateDocsTree(numberDesc).ok).toBe(false);
+    expect(
+      validateDocsTree(emptyTitle).errors.some((e) => e.includes('title')),
+    ).toBe(true);
+    expect(
+      validateDocsTree(numberTitle).errors.some((e) => e.includes('title')),
+    ).toBe(true);
+    expect(
+      validateDocsTree(missingDesc).errors.some((e) =>
+        e.includes('description'),
+      ),
+    ).toBe(true);
+    expect(
+      validateDocsTree(numberDesc).errors.some((e) =>
+        e.includes('description'),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('CLI', () => {
+  test('--lint without positional and without GITHUB_WORKSPACE exits 2', () => {
+    const r = runCli(['--lint'], { GITHUB_WORKSPACE: undefined });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('usage:');
   });
 });

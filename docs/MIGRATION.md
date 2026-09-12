@@ -52,6 +52,18 @@ No shims. Old filenames are deleted. Change every `uses:` in the same window. Pi
 
 `stale.yml` and `repo-stale.yml` exist again as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not fail. They are not the public API. New callers still use `ops-stale.yml@v2`.
 
+## Docs validator CLI (fan-in / local)
+
+`ci-docs.yml` caller YAML is unchanged. Programmatic use is the CLI, not `import()`:
+
+```bash
+cd actions/validate-docs-tree
+bun install --frozen-lockfile
+bun validate-docs-tree.ts "$docsDir" --lint
+```
+
+Do not `bun install` at the workflows root for the validator. `--lint` loads sibling `docs-tree.markdownlint.jsonc`. `MARKDOWNLINT_CONFIG` is not read. Absolute `<docs-dir>` is allowed (fan-in tmp).
+
 ## Post-cutover scan
 
 ```bash

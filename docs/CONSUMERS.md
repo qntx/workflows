@@ -45,6 +45,16 @@ jobs:
       contents: read
 ```
 
+Fan-in and local runs spawn the CLI. Do not `import()` the module. Do not `bun install` at the workflows root for the validator:
+
+```bash
+cd actions/validate-docs-tree
+bun install --frozen-lockfile
+bun validate-docs-tree.ts "$docsDir" --lint
+```
+
+`--lint` loads sibling `docs-tree.markdownlint.jsonc`. Absolute `<docs-dir>` is allowed.
+
 ## Publish / npm
 
 OIDC (no `NPM_TOKEN`):

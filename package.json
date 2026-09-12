@@ -1,5 +1,5 @@
 {
-  "dependencies": {},
+  "private": true,
   "devDependencies": {
     "markdownlint-cli2": "^0.23.2",
     "prettier": "^3.7.4"
@@ -7,7 +7,6 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules'",
-    "test": "bun test"
+    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules' '#**/node_modules'"
   }
 }

@@ -13,9 +13,15 @@ check:
 markdownlint:
     bun run markdownlint
 
-# Run bun test.
+# Run validator tests.
 test:
-    bun test
+    bun install --frozen-lockfile --cwd actions/validate-docs-tree
+    bun test --cwd actions/validate-docs-tree
+
+# Typecheck the validator.
+typecheck:
+    bun install --frozen-lockfile --cwd actions/validate-docs-tree
+    bun run --cwd actions/validate-docs-tree typecheck
 
 # Unit tests for private composite actions.
 test-composites:
@@ -46,7 +52,8 @@ help:
     @echo "  just format          - Format all files with Prettier"
     @echo "  just check           - Check formatting without writing changes"
     @echo "  just markdownlint    - Run markdownlint-cli2"
-    @echo "  just test            - Run bun test"
+    @echo "  just test            - Run validator tests"
+    @echo "  just typecheck       - Typecheck the validator"
     @echo "  just test-composites - Run composite action unit tests"
     @echo "  just lint            - check + markdownlint + test-composites"
     @echo "  just actionlint      - Lint .github/workflows/*.yml with actionlint"

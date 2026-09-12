@@ -5,8 +5,18 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  statSync,
 } from 'node:fs';
-import { dirname, extname, join, relative, resolve, sep } from 'node:path';
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
+import { load as loadYaml } from 'js-yaml';
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']);
 const ALLOWED_EXT = new Set(['.mdx', '.txt', ...IMAGE_EXT]);
@@ -30,7 +40,10 @@ const SKIP_NAMES = new Set(['.DS_Store', 'node_modules', '.git', '.github']);
 const TREE_BYTES = 20 * 1024 * 1024;
 const FILE_BYTES = 2 * 1024 * 1024;
 const MARKDOWNLINT_MISSING =
-  'markdownlint-cli2 not found (set MARKDOWNLINT_CLI2 or bun install in qntx/workflows)';
+  'markdownlint-cli2 not found (set MARKDOWNLINT_CLI2 or bun install in this directory)';
+const USAGE = `usage: bun validate-docs-tree.ts <docs-dir> [--lint]
+       bun validate-docs-tree.ts --lint
+         # action mode: GITHUB_WORKSPACE + WORKDIR + DOCS_PATH`;
 
 export type ValidateResult = { ok: boolean; errors: string[] };
 
@@ -38,9 +51,74 @@ export type ValidateOptions = {
   markdownlintConfig?: string;
 };
 
+export type JailResult =
+  | { ok: true; root: string }
+  | { ok: false; errors: string[] };
+
 function isInside(root: string, candidate: string): boolean {
   const rel = relative(root, candidate);
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..');
+}
+
+function hasDotDot(p: string): boolean {
+  return p
+    .replace(/\\/g, '/')
+    .split('/')
+    .some((part) => part === '..');
+}
+
+export function resolveDocsRoot(
+  workspace: string,
+  workingDirectory: string,
+  docsPath: string,
+): JailResult {
+  if (!workspace) {
+    return { ok: false, errors: ['workspace missing or not a directory'] };
+  }
+  let workspaceReal: string;
+  try {
+    workspaceReal = realpathSync(workspace);
+    if (!statSync(workspaceReal).isDirectory()) {
+      return { ok: false, errors: ['workspace missing or not a directory'] };
+    }
+  } catch {
+    return { ok: false, errors: ['workspace missing or not a directory'] };
+  }
+
+  const wd = workingDirectory || '.';
+  const docs = docsPath || 'docs';
+
+  if (isAbsolute(wd)) {
+    return { ok: false, errors: ['working-directory must be relative'] };
+  }
+  if (isAbsolute(docs)) {
+    return { ok: false, errors: ['docs-path must be relative'] };
+  }
+  if (hasDotDot(wd)) {
+    return { ok: false, errors: ['working-directory must not contain ..'] };
+  }
+  if (hasDotDot(docs)) {
+    return { ok: false, errors: ['docs-path must not contain ..'] };
+  }
+
+  const candidate = join(workspaceReal, wd, docs);
+  let joined: string;
+  try {
+    joined = realpathSync(candidate);
+  } catch {
+    return { ok: false, errors: [`docs tree missing: ${candidate}`] };
+  }
+  if (joined !== workspaceReal && !joined.startsWith(workspaceReal + sep)) {
+    return { ok: false, errors: ['docs-path escapes workspace'] };
+  }
+  try {
+    if (!statSync(joined).isDirectory()) {
+      return { ok: false, errors: [`docs tree missing: ${joined}`] };
+    }
+  } catch {
+    return { ok: false, errors: [`docs tree missing: ${joined}`] };
+  }
+  return { ok: true, root: joined };
 }
 
 function stripFences(src: string): string {
@@ -68,24 +146,24 @@ function walk(root: string): string[] {
 
 function parseFrontmatter(
   body: string,
-): { title?: string; description?: string; full?: unknown } | null {
+): { title?: unknown; description?: unknown; full?: unknown } | null {
   if (!body.startsWith('---')) return null;
   const end = body.indexOf('\n---', 3);
   if (end < 0) return null;
-  const fm = body.slice(3, end);
-  const title = fm
-    .match(/^title:\s*(.*)$/m)?.[1]
-    ?.trim()
-    .replace(/^["']|["']$/g, '');
-  const description = fm
-    .match(/^description:\s*(.*)$/m)?.[1]
-    ?.trim()
-    .replace(/^["']|["']$/g, '');
-  const fullRaw = fm.match(/^full:\s*(.*)$/m)?.[1]?.trim();
-  let full: unknown;
-  if (fullRaw === 'true') full = true;
-  else if (fullRaw === 'false') full = false;
-  return { title, description, full };
+  let parsed: unknown;
+  try {
+    parsed = loadYaml(body.slice(3, end));
+  } catch {
+    return null;
+  }
+  if (parsed === null || parsed === undefined) return {};
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const obj = parsed as Record<string, unknown>;
+  return {
+    title: obj.title,
+    description: obj.description,
+    full: obj.full,
+  };
 }
 
 function pageExists(root: string, slug: string): boolean {
@@ -104,8 +182,6 @@ function resolveMarkdownlintCli2(): { bin: string } | { error: string } {
   }
   const local = resolve(
     import.meta.dir,
-    '..',
-    '..',
     'node_modules',
     '.bin',
     'markdownlint-cli2',
@@ -202,8 +278,12 @@ export function validateDocsTree(
       errors.push(`frontmatter required: ${rel}`);
       continue;
     }
-    if (!fm.title) errors.push(`frontmatter title required: ${rel}`);
-    if (!fm.description)
+    if (typeof fm.title !== 'string' || fm.title.trim().length === 0)
+      errors.push(`frontmatter title required: ${rel}`);
+    if (
+      typeof fm.description !== 'string' ||
+      fm.description.trim().length === 0
+    )
       errors.push(`frontmatter description required: ${rel}`);
     if (fm.full === true) errors.push(`full: true rejected: ${rel}`);
 
@@ -271,18 +351,63 @@ export function validateDocsTree(
   return { ok: errors.length === 0, errors };
 }
 
-if (import.meta.main) {
-  const root = process.argv[2];
-  if (!root) {
-    console.error(
-      'usage: bun actions/validate-docs-tree/validate-docs-tree.ts <docs-dir>',
-    );
-    process.exit(2);
+function emitError(msg: string): void {
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    console.error(`::error::${msg}`);
+  } else {
+    console.error(msg);
   }
-  const config = process.argv.includes('--lint')
+}
+
+function run(argv: string[]): number {
+  let lint = false;
+  let positional: string | undefined;
+  for (const a of argv) {
+    if (a === '--lint') {
+      lint = true;
+      continue;
+    }
+    if (a.startsWith('-')) {
+      console.error(USAGE);
+      return 2;
+    }
+    if (positional !== undefined) {
+      console.error(USAGE);
+      return 2;
+    }
+    positional = a;
+  }
+
+  const config = lint
     ? resolve(import.meta.dir, 'docs-tree.markdownlint.jsonc')
     : undefined;
+
+  let root: string;
+  if (positional !== undefined) {
+    root = positional;
+  } else {
+    const workspace = process.env.GITHUB_WORKSPACE;
+    if (!workspace) {
+      console.error(USAGE);
+      return 2;
+    }
+    const jailed = resolveDocsRoot(
+      workspace,
+      process.env.WORKDIR ?? '',
+      process.env.DOCS_PATH ?? '',
+    );
+    if (!jailed.ok) {
+      for (const e of jailed.errors) emitError(e);
+      return 1;
+    }
+    root = jailed.root;
+  }
+
   const result = validateDocsTree(root, { markdownlintConfig: config });
-  for (const e of result.errors) console.error(e);
-  process.exit(result.ok ? 0 : 1);
+  for (const e of result.errors) emitError(e);
+  return result.ok ? 0 : 1;
+}
+
+if (import.meta.main) {
+  process.exit(run(process.argv.slice(2)));
 }
