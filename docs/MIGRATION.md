@@ -64,18 +64,6 @@ bun validate-docs-tree.ts "$docsDir" --lint
 
 Do not `bun install` at the workflows root for the validator. `--lint` loads sibling `docs-tree.markdownlint.jsonc`. `MARKDOWNLINT_CONFIG` is not read. Absolute `<docs-dir>` is allowed (fan-in tmp).
 
-## Docs validator CLI (fan-in / local)
-
-`ci-docs.yml` caller YAML is unchanged. Programmatic use is the CLI, not `import()`:
-
-```bash
-cd actions/validate-docs-tree
-bun install --frozen-lockfile
-bun validate-docs-tree.ts "$docsDir" --lint
-```
-
-Do not `bun install` at the workflows root for the validator. `--lint` loads sibling `docs-tree.markdownlint.jsonc`. `MARKDOWNLINT_CONFIG` is not read. Absolute `<docs-dir>` is allowed (fan-in tmp).
-
 ## Post-cutover scan
 
 ```bash
