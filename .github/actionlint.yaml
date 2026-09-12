@@ -1,6 +1,16 @@
 # actionlint 1.7.12 does not parse uses: $/ (rhysd/actionlint#711).
+# actionlint 1.7.12 job context lacks workflow_sha / workflow_repository
+# (github.com 2026-09-03). Those ignores are file-scoped; matching paths merge.
 paths:
   .github/workflows/**/*.yml:
     ignore:
       - 'specifying action "\$/[^"]*" in invalid format because ref is missing'
       - 'reusable workflow call "\$/[^"]*" at "uses" is not following the format'
+  .github/workflows/ci-docs.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'
+      - 'property "workflow_repository" is not defined in object type'
+  .github/workflows/ops-docs-fan-in.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined in object type'
+      - 'property "workflow_repository" is not defined in object type'

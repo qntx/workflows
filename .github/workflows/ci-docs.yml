@@ -1,0 +1,116 @@
+name: CI / Docs
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 20
+      bun-version:
+        description: 'Bun version. Not latest.'
+        required: false
+        type: string
+        default: '1.4'
+      docs-path:
+        description: 'Docs tree relative to working-directory. Default docs.'
+        required: false
+        type: string
+        default: 'docs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qntx-workflows-ci-docs-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - name: Require reusable workflow identity
+        env:
+          WF_SHA: ${{ job.workflow_sha }}
+          WF_REPO: ${{ job.workflow_repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "$WF_SHA" ] || [ -z "$WF_REPO" ]; then
+            echo '::error::job.workflow_sha or job.workflow_repository empty; refusing to float validator'
+            exit 1
+          fi
+          {
+            echo '## CI / Docs'
+            echo "- workflow: ${WF_REPO}@${WF_SHA}"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: $/actions/hardened-checkout
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: _qntx_workflows
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install validator deps
+        working-directory: _qntx_workflows
+        run: bun install --frozen-lockfile
+
+      - name: Jail docs-path and validate
+        env:
+          ROOT: ${{ github.workspace }}
+          WORKDIR: ${{ inputs.working-directory }}
+          DOCS_PATH: ${{ inputs.docs-path }}
+        run: |
+          set -euo pipefail
+          docs_abs="$(
+            python3 -c '
+          import os, sys
+          root = os.path.realpath(os.environ["ROOT"])
+          wd = os.environ.get("WORKDIR") or "."
+          docs = os.environ.get("DOCS_PATH") or "docs"
+          for label, p in (("working-directory", wd), ("docs-path", docs)):
+              if os.path.isabs(p):
+                  sys.stderr.write(f"::error::{label} must be relative\n")
+                  sys.exit(1)
+              if any(part == ".." for part in p.replace("\\", "/").split("/")):
+                  sys.stderr.write(f"::error::{label} must not contain ..\n")
+                  sys.exit(1)
+          joined = os.path.realpath(os.path.join(root, wd, docs))
+          if joined != root and not joined.startswith(root + os.sep):
+              sys.stderr.write("::error::docs-path escapes workspace\n")
+              sys.exit(1)
+          if not os.path.isdir(joined):
+              sys.stderr.write(f"::error::docs tree missing: {joined}\n")
+              sys.exit(1)
+          print(joined)
+          '
+          )"
+          bun "$ROOT/_qntx_workflows/scripts/validate-docs-tree.ts" "$docs_abs" --lint

@@ -35,6 +35,16 @@ permissions:
 
 `ci-go.yml` `golangci-lint-version` must be `v2.N`, `v2.N.M`, or `latest`. Do not pass `v2`.
 
+`ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`.
+
+```yaml
+jobs:
+  docs:
+    uses: qntx/workflows/.github/workflows/ci-docs.yml@v2
+    permissions:
+      contents: read
+```
+
 ## Publish / npm
 
 OIDC (no `NPM_TOKEN`):
@@ -182,6 +192,15 @@ permissions:
 secrets:
   SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # optional; falls back to github.token
 ```
+
+## Ops / Docs fan-in
+
+```yaml
+permissions:
+  contents: write
+```
+
+No secrets. Caller owns `on:` (`schedule` `50 * * * *` + `workflow_dispatch`). Nested job id `fan-in`. `scripts/fan-in.ts` lives in the caller.
 
 ## Ops / Dependabot
 

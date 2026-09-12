@@ -13,6 +13,10 @@ check:
 markdownlint:
     bun run markdownlint
 
+# Run bun test.
+test:
+    bun test
+
 # Unit tests for private composite actions.
 test-composites:
     bash actions/protect-sync-path/test.sh
@@ -42,6 +46,7 @@ help:
     @echo "  just format          - Format all files with Prettier"
     @echo "  just check           - Check formatting without writing changes"
     @echo "  just markdownlint    - Run markdownlint-cli2"
+    @echo "  just test            - Run bun test"
     @echo "  just test-composites - Run composite action unit tests"
     @echo "  just lint            - check + markdownlint + test-composites"
     @echo "  just actionlint      - Lint .github/workflows/*.yml with actionlint"

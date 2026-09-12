@@ -1,0 +1,29 @@
+# Caller owns on:. Pin at @v2.
+name: Fan-in
+
+on:
+  schedule:
+    - cron: '50 * * * *'
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Optional owner/name to sync only that source'
+        required: false
+        type: string
+      force:
+        description: 'Ignore SHA skip'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  fan-in:
+    uses: qntx/workflows/.github/workflows/ops-docs-fan-in.yml@v2
+    permissions:
+      contents: write
+    with:
+      repo: ${{ github.event_name == 'workflow_dispatch' && inputs.repo || '' }}
+      force: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
