@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
 - `scorecard` checkout is `$/actions/hardened-checkout`.
 - `ci-docs.yml` no longer identity-checkouts this repository or jails `docs-path` in Python. `$/actions/validate-docs-tree` is self-contained (`package.json` + lockfile; `bun install` at `github.action_path`).
+- `stale.yml` and `repo-stale.yml` stay as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not 404. Not a public API. New callers use `ops-stale.yml@v2`.
 
 ### Fixed
 
@@ -39,7 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `ops-docs-fan-in.yml`. Public-docs fan-in is a `qntx/docs` workflow, not a reusable callee.
-- `stale.yml` and `repo-stale.yml` (#45 forwards). Public stale API is `ops-stale.yml@v2` only.
 - `ops-dependabot` `pull_request` / `pull_request_target` job arm, `dependabot/fetch-metadata`, and composite inputs `pr-labels`, `update-type`, `actor`, `pr-node-id`, `event-name`.
 
 ## [2.0.0] - 2026-08-28
