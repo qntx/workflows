@@ -31,6 +31,8 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
+`ci-docs.yml` extra inputs: `bun-version` (default `1.4`), `docs-path` (default `docs`, relative to `working-directory`). Those paths are jailed inside `GITHUB_WORKSPACE`. Fan-in/local CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Do not `bun install` at the workflows root for the validator.
+
 ## Private (`self-*`)
 
 Not a consumer API. Required check-run name for this repository is `Self / CI`.

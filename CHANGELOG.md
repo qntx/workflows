@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `self-retag` force-moves annotated `vN` to `origin/main` after squash. Input `target` is deleted.
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
 - `scorecard` checkout is `$/actions/hardened-checkout`.
+- `ci-docs.yml` no longer identity-checkouts this repository or jails `docs-path` in Python. `$/actions/validate-docs-tree` is self-contained (`package.json` + lockfile; `bun install` at `github.action_path`).
 
 ### Fixed
 
@@ -33,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` (local path after identity checkout).
+- `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` after checkout and setup-bun. Path jail is TypeScript `resolveDocsRoot`. Local/fan-in CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Root lockfile is repo-dev only.
 
 ### Removed
 

@@ -10,3 +10,13 @@ updates:
       - 'dependencies'
       - 'github-actions'
     open-pull-requests-limit: 10
+  - package-ecosystem: 'bun'
+    directories:
+      - '/'
+      - '/actions/validate-docs-tree'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    open-pull-requests-limit: 10
