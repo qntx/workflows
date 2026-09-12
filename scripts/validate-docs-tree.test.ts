@@ -228,6 +228,22 @@ description: No site public paths.
     expect(r.errors.some((e) => e.includes('root-absolute'))).toBe(true);
   });
 
+  test('rejects src={"/ ImageZoom double-quote', () => {
+    const dir = tree({
+      'meta.json': okMeta,
+      'index.mdx': `---
+title: Index
+description: No site public paths.
+---
+
+<ImageZoom src={"/examples/diagram.svg"} />
+`,
+    });
+    const r = validateDocsTree(dir);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.includes('root-absolute'))).toBe(true);
+  });
+
   test('markdownlint MD040 on untagged fence', () => {
     const dir = tree({
       'meta.json': okMeta,

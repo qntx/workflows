@@ -218,7 +218,11 @@ export function validateDocsTree(
     if (
       stripped.includes('](/examples/') ||
       stripped.includes('src="/') ||
-      stripped.includes("src={'/")
+      stripped.includes("src={'/") ||
+      stripped.includes('src={"/') ||
+      stripped.includes('href="/') ||
+      stripped.includes("href={'/") ||
+      stripped.includes('href={"/')
     ) {
       errors.push(`root-absolute site path rejected: ${rel}`);
     }
