@@ -16,6 +16,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ci-node.yml`           | `CI / Node.js`        | `ci`                           | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.                                                            |
 | `ci-python.yml`         | `CI / Python`         | `ci`                           | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                                                                    |
 | `ci-rust.yml`           | `CI / Rust`           | `ci`                           | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.                                                   |
+| `ci-docs.yml`           | `CI / Docs`           | `ci`                           | Validate a Fumadocs library tree (`docs-path` default `docs`). `bun-version` default `1.4`.                                                    |
 | `publish-npm.yml`       | `Publish / npm`       | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                                                       |
 | `publish-pypi.yml`      | `Publish / PyPI`      | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`.                                                       |
 | `publish-crates.yml`    | `Publish / crates.io` | `publish`                      | `cargo publish --locked`, skip-if-exists, 429 retry. `CARGO_REGISTRY_TOKEN` required.                                                          |
@@ -27,6 +28,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                                                         |
 | `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Jail is canonical `.git` / `.github` segments after `realpath`, not worktree-root prefix only. rsync also excludes those names. |
 | `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Schedule squash-merge green Dependabot PRs. No auto-merge arm. No checkout. Caller owns `on:`.                                                 |
+| `ops-docs-fan-in.yml`   | `Ops / Docs fan-in`   | `fan-in`                       | Public library-docs fan-in. Caller owns `on:`. Runs caller `scripts/fan-in.ts`. No secrets.                                                    |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
@@ -34,13 +36,13 @@ Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`)
 
 Not a consumer API. Required check-run name for this repository is `Self / CI`.
 
-| File                  | `name:`             | Job ids                                                                     | Purpose                                                                          |
-| --------------------- | ------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                        |
-| `self-release.yml`    | `Self / Release`    | `release`                                                                   | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
-| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                     | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
-| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                     | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
-| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                     | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
+| File                  | `name:`             | Job ids                                                                                      | Purpose                                                                          |
+| --------------------- | ------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `tests`, `docs`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                        |
+| `self-release.yml`    | `Self / Release`    | `release`                                                                                    | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
+| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                                      | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
+| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                                      | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
+| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                                      | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.
 

@@ -135,6 +135,27 @@ jobs:
           bash actions/apt-install/test.sh
           bash actions/ops-dependabot-enable/test.sh
 
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Install and test
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun test
+
+  docs:
+    uses: $/.github/workflows/ci-docs.yml
+    permissions:
+      contents: read
+    with:
+      docs-path: scripts/fixtures/valid-docs
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -164,7 +185,7 @@ jobs:
   ci:
     name: Self / CI
     if: always()
-    needs: [actionlint, zizmor, pinact, format, composites]
+    needs: [actionlint, zizmor, pinact, format, composites, tests, docs]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -176,7 +197,9 @@ jobs:
           || needs.zizmor.result != 'success'
           || needs.pinact.result != 'success'
           || needs.format.result != 'success'
-          || needs.composites.result != 'success' }}
+          || needs.composites.result != 'success'
+          || needs.tests.result != 'success'
+          || needs.docs.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

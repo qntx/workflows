@@ -7,6 +7,7 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules'"
+    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules'",
+    "test": "bun test"
   }
 }

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`.
+- `ops-docs-fan-in.yml`: reusable public-docs fan-in callee. Caller owns `on:`; `scripts/fan-in.ts` stays in the caller. No secrets.
 - `stale.yml` and `repo-stale.yml` compatibility aliases. `workflow_call` only; they forward to `ops-stale.yml` so unmigrated `@main` callers (qntx-labs) stop failing on a missing file. New callers still use `ops-stale.yml@v2`.
 
 ### Removed
