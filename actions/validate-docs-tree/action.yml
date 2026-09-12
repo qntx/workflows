@@ -1,0 +1,14 @@
+name: validate-docs-tree
+description: Fail-closed Fumadocs library-tree check.
+inputs:
+  docs-path:
+    description: Absolute path to the docs tree.
+    required: true
+runs:
+  using: composite
+  steps:
+    - env:
+        ACTION_PATH: ${{ github.action_path }}
+        DOCS_PATH: ${{ inputs.docs-path }}
+      run: bun "$ACTION_PATH/validate-docs-tree.ts" "$DOCS_PATH" --lint
+      shell: bash

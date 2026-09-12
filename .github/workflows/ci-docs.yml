@@ -83,7 +83,8 @@ jobs:
         working-directory: _qntx_workflows
         run: bun install --frozen-lockfile
 
-      - name: Jail docs-path and validate
+      - id: jail
+        name: Jail docs-path
         env:
           ROOT: ${{ github.workspace }}
           WORKDIR: ${{ inputs.working-directory }}
@@ -113,4 +114,8 @@ jobs:
           print(joined)
           '
           )"
-          bun "$ROOT/_qntx_workflows/scripts/validate-docs-tree.ts" "$docs_abs" --lint
+          echo "docs=${docs_abs}" >>"$GITHUB_OUTPUT"
+
+      - uses: ./_qntx_workflows/actions/validate-docs-tree
+        with:
+          docs-path: ${{ steps.jail.outputs.docs }}

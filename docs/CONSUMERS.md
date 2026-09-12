@@ -193,15 +193,6 @@ secrets:
   SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }} # optional; falls back to github.token
 ```
 
-## Ops / Docs fan-in
-
-```yaml
-permissions:
-  contents: write
-```
-
-No secrets. Caller owns `on:` (`schedule` `50 * * * *` + `workflow_dispatch`). Nested job id `fan-in`. `scripts/fan-in.ts` lives in the caller.
-
 ## Ops / Dependabot
 
 ```yaml

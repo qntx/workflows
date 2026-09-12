@@ -33,12 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`.
-- `ops-docs-fan-in.yml`: reusable public-docs fan-in callee. Caller owns `on:`; `scripts/fan-in.ts` stays in the caller. No secrets.
-- `stale.yml` and `repo-stale.yml` compatibility aliases. `workflow_call` only; they forward to `ops-stale.yml` so unmigrated `@main` callers (qntx-labs) stop failing on a missing file. New callers still use `ops-stale.yml@v2`.
+- `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` (local path after identity checkout).
 
 ### Removed
 
+- `ops-docs-fan-in.yml`. Public-docs fan-in is a `qntx/docs` workflow, not a reusable callee.
+- `stale.yml` and `repo-stale.yml` compatibility aliases. `workflow_call` only; they forward to `ops-stale.yml` so unmigrated `@main` callers (qntx-labs) stop failing on a missing file. New callers still use `ops-stale.yml@v2`.
 - `ops-dependabot` `pull_request` / `pull_request_target` job arm, `dependabot/fetch-metadata`, and composite inputs `pr-labels`, `update-type`, `actor`, `pr-node-id`, `event-name`.
 
 ## [2.0.0] - 2026-08-28

@@ -105,6 +105,7 @@ function resolveMarkdownlintCli2(): { bin: string } | { error: string } {
   const local = resolve(
     import.meta.dir,
     '..',
+    '..',
     'node_modules',
     '.bin',
     'markdownlint-cli2',
@@ -273,7 +274,9 @@ export function validateDocsTree(
 if (import.meta.main) {
   const root = process.argv[2];
   if (!root) {
-    console.error('usage: bun scripts/validate-docs-tree.ts <docs-dir>');
+    console.error(
+      'usage: bun actions/validate-docs-tree/validate-docs-tree.ts <docs-dir>',
+    );
     process.exit(2);
   }
   const config = process.argv.includes('--lint')

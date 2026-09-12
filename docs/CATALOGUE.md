@@ -28,7 +28,6 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 | `ops-stale.yml`         | `Ops / Stale`         | `stale`                        | `actions/stale`. `workflow_call` only.                                                                                                         |
 | `ops-sync.yml`          | `Ops / Sync`          | `sync`                         | Folder mirror. Jail is canonical `.git` / `.github` segments after `realpath`, not worktree-root prefix only. rsync also excludes those names. |
 | `ops-dependabot.yml`    | `Ops / Dependabot`    | `merge`                        | Schedule squash-merge green Dependabot PRs. No auto-merge arm. No checkout. Caller owns `on:`.                                                 |
-| `ops-docs-fan-in.yml`   | `Ops / Docs fan-in`   | `fan-in`                       | Public library-docs fan-in. Caller owns `on:`. Runs caller `scripts/fan-in.ts`. No secrets.                                                    |
 
 Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`), `working-directory` (`.`), `submodules` (`false`), `timeout-minutes` (`20`; `30` on rust / foundry).
 
