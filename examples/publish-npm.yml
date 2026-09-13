@@ -1,4 +1,4 @@
-# Caller owns on:. Pin at @v2.0.0.
+# Caller owns on:. Pin at @v2.
 # OIDC path (no NPM_TOKEN). Token-only callers drop id-token and pass NPM_TOKEN.
 name: Publish
 
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   publish:
-    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2
     with:
       package-manager: npm
       # Monorepo: install-directory: .

@@ -8,6 +8,8 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 
 ## Public API
 
+Consumers pin every public file at `@v2`.
+
 | File                    | `name:`               | Job ids                        | Purpose                                                                                                                                        |
 | ----------------------- | --------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci-bun.yml`            | `CI / Bun`            | `ci`                           | Bun install / lint / typecheck / build / test. `bun-version` default `1.4`.                                                                    |

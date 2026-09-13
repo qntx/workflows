@@ -4,7 +4,7 @@
 
 Reusable GitHub Actions workflows for QuantX repositories.
 
-Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
+Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` is a historical immutable tag, not the consumer pin.
 
 See [docs/](docs/).
 
