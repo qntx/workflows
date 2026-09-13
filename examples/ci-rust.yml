@@ -1,4 +1,5 @@
 # Caller owns on:. Pin at @v2.
+# Product extras (e.g. no-std) stay sibling jobs in this file.
 name: CI
 
 on:
@@ -12,7 +13,8 @@ permissions:
 jobs:
   ci:
     uses: qntx/workflows/.github/workflows/ci-rust.yml@v2
+    permissions:
+      contents: read
     with:
       rust-version: stable
-      submodules: true
       # deny: true   # requires deny.toml next to Cargo.toml
