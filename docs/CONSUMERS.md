@@ -33,16 +33,53 @@ permissions:
   contents: read
 ```
 
+Language CI is `.github/workflows/ci.yml` (job id `ci`). Docs CI is `.github/workflows/ci-docs.yml` (job id `docs`). Do not put a `docs` job in `ci.yml`.
+
 `ci-go.yml` `golangci-lint-version` must be `v2.N`, `v2.N.M`, or `latest`. Do not pass `v2`.
 
-`ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`.
+`ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`. Pin `@v2`. Copy `examples/ci-docs.yml`.
 
 ```yaml
+# .github/workflows/ci-docs.yml
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   docs:
     uses: qntx/workflows/.github/workflows/ci-docs.yml@v2
     permissions:
       contents: read
+```
+
+Library `docs/` must pass `validate-docs-tree --lint`. Empty directory is illegal. Minimal stub (replace `example` with the GitHub repo name): `examples/docs-stub/`. Omit `root`. `root: true` is forbidden (`library docs must not set root:true`). Stubs never enter `qntx/docs` `fan-in/manifest.json`.
+
+`docs/meta.json`:
+
+```json
+{
+  "title": "example",
+  "description": "Documentation stub.",
+  "pages": ["index"]
+}
+```
+
+`docs/index.mdx`:
+
+```mdx
+---
+title: example
+description: Documentation stub.
+---
+
+Documentation stub.
 ```
 
 Fan-in and local runs spawn the CLI. Do not `import()` the module. Do not `bun install` at the workflows root for the validator:
