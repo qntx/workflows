@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scorecard` checkout is `$/actions/hardened-checkout`.
 - `ci-docs.yml` no longer identity-checkouts this repository or jails `docs-path` in Python. `$/actions/validate-docs-tree` is self-contained (`package.json` + lockfile; `bun install` at `github.action_path`).
 - `stale.yml` and `repo-stale.yml` stay as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not 404. Not a public API. New callers use `ops-stale.yml@v2`.
+- Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` remains a historical immutable tag, not the consumer pin.
 
 ### Fixed
 

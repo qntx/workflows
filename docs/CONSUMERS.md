@@ -2,7 +2,7 @@
 
 The caller owns `on:`. Callees only declare `workflow_call` inputs, secrets, and outputs.
 
-Pin CI and ops at `@v2`. Pin publish, release, and deploy at `@v2.0.0`.
+Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` is a historical immutable tag, not the consumer pin.
 
 ```yaml
 jobs:
@@ -122,7 +122,7 @@ jobs:
       fail-fast: false
       matrix:
         package: [packages/a, packages/b]
-    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2.0.0
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2
     permissions:
       contents: read
       id-token: write

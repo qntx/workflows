@@ -40,9 +40,11 @@ Security fixes land on `main`. Historical `v1` / `v1.0.0` tags are
 unsupported. Immutable SemVer tags of the current major, once published,
 receive fixes as patch releases on that major.
 
-Consumers that pin a moving ref (`@main`, moving major tags) consume every
-subsequent commit. Pin a commit SHA or an immutable `vX.Y.Z` tag when the
-blast radius of a workflow change matters.
+The default consumer pin is the moving major tag `@v2`. `Self / Retag`
+force-moves it to `origin/main`. Consumers that pin `@v2` consume every
+subsequent commit after a retag. Pin a commit SHA or an immutable
+`vX.Y.Z` tag only when a specific consumer wants a freeze. That is
+opt-in, not the org standard.
 
 ## Reporting a vulnerability
 

@@ -1,4 +1,4 @@
-# Caller owns on:. Pin at @v2.0.0.
+# Caller owns on:. Pin at @v2.
 name: Release
 
 on:
@@ -10,4 +10,4 @@ permissions:
 
 jobs:
   release:
-    uses: qntx/workflows/.github/workflows/release.yml@v2.0.0
+    uses: qntx/workflows/.github/workflows/release.yml@v2
