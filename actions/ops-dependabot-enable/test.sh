@@ -310,6 +310,57 @@ else
 fi
 rm -f "$viewed" "$merged"
 
+merge_now_gh() {
+  case "${MERGE_NOW_CASE:-}" in
+    conflicts)
+      echo 'GraphQL: Pull Request has merge conflicts (mergePullRequest)' >&2
+      return 1
+      ;;
+    base-once)
+      echo 'GraphQL: Base branch was modified. Review and try the merge again.' >&2
+      return 1
+      ;;
+    ok)
+      echo 'merged'
+      return 0
+      ;;
+    *)
+      echo "ops-dependabot-test: unexpected MERGE_NOW_CASE ${MERGE_NOW_CASE:-}" >&2
+      return 1
+      ;;
+  esac
+}
+
+base_env
+GITHUB_REPOSITORY='qntx/openai'
+PR_NUMBER='80'
+HEAD_OID='abc'
+gh() { merge_now_gh "$@"; }
+
+MERGE_NOW_CASE=conflicts
+set +e
+ops_dependabot_merge_now >/dev/null
+merge_rc=$?
+set -e
+expect_eq 'merge-now-conflicts' "$merge_rc" '0'
+
+n_sleep() { :; }
+sleep() { n_sleep "$@"; }
+MERGE_NOW_CASE=base-once
+# Always "base modified" → five retries then wait (0), never fail.
+set +e
+ops_dependabot_merge_now >/dev/null
+merge_rc=$?
+set -e
+expect_eq 'merge-now-base-modified-exhausted' "$merge_rc" '0'
+
+MERGE_NOW_CASE=ok
+set +e
+ops_dependabot_merge_now >/dev/null
+merge_rc=$?
+set -e
+expect_eq 'merge-now-ok' "$merge_rc" '0'
+
 if [ "$fail" -ne 0 ]; then
   echo 'ops-dependabot-enable tests failed'
   exit 1
