@@ -8,7 +8,7 @@ updates:
       interval: 'weekly'
     labels:
       - 'dependencies'
-      - 'github-actions'
+      - 'github_actions'
     open-pull-requests-limit: 10
   - package-ecosystem: 'bun'
     directories:
@@ -18,5 +18,4 @@ updates:
       interval: 'weekly'
     labels:
       - 'dependencies'
-      - 'javascript'
     open-pull-requests-limit: 10

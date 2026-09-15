@@ -251,11 +251,17 @@ ops_dependabot_merge_now() {
       echo '::notice::ops-dependabot: head moved; next sweep will retry'
       return 0
     fi
+    # Same class as evaluate skip:conflicts / skip:dirty: another PR in this
+    # sweep landed first, or Dependabot has not rebased yet. Next cron retries.
+    if printf '%s\n' "$out" | grep -Eqi 'merge conflicts|not mergeable'; then
+      echo '::notice::ops-dependabot: conflicts; next sweep will retry'
+      return 0
+    fi
     if printf '%s\n' "$out" | grep -Fq 'Base branch was modified'; then
       n=$((n + 1))
       if [ "$n" -ge 5 ]; then
-        printf '%s\n' "$out"
-        return 1
+        echo '::notice::ops-dependabot: base branch modified; next sweep will retry'
+        return 0
       fi
       echo "::notice::ops-dependabot: retry ${n}/5, base branch modified"
       sleep $((n * 2))

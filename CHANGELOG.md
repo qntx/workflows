@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `github/codeql-action/upload-sarif` `v4.38.0`.
 - Website URL is `.org` (#29).
 - `ops-dependabot` retries `gh pr merge` up to five times when the base branch was modified (#31).
 - `ops-dependabot` used GraphQL `enablePullRequestAutoMerge` on `pull_request` (#32), treated `UNSTABLE` as a notice (#33), and introduced a schedule sweep that squash-merges when non-self checks are green (#34). That `pull_request` arm is deleted. The composite always sweeps on `schedule` / `workflow_dispatch`.
@@ -30,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ops-dependabot`: `gh pr merge` conflicts and exhausted `Base branch was modified` retries wait for the next sweep instead of failing the job.
+- `dependabot.yml`: use the existing `github_actions` label. Drop `github-actions` and `javascript` (those labels are not in this repository).
 - `publish-pypi` checks the dist with `uvx twine` instead of `uv pip install --system twine`, which fails on PEP 668 externally-managed CPython from `setup-uv`.
 - `publish-pypi` uploads with `uv publish` instead of `pypa/gh-action-pypi-publish`. Nested Docker actions resolve to `ghcr.io/qntx/workflows:<sha>` and 403.
 - `publish-pypi` does not export empty `UV_PUBLISH_URL`; uv treats `''` as an invalid `--publish-url`.
