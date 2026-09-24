@@ -5,6 +5,10 @@ inputs:
     description: 'Rust toolchain to install (stable, nightly, 1.90.0, ...).'
     required: false
     default: 'stable'
+  toolchain-file:
+    description: 'When true, parse channel from rust-toolchain.toml or a one-line rust-toolchain and pass it as dtolnay toolchain. Requires rust-version empty. This pin does not read the file itself.'
+    required: false
+    default: 'false'
   components:
     description: 'Comma-separated rustup components to install. Empty = none.'
     required: false
@@ -17,14 +21,34 @@ inputs:
     description: 'Extra cache key suffix to isolate cargo caches across jobs. Empty = default key.'
     required: false
     default: ''
+outputs:
+  channel:
+    description: 'Toolchain string passed to dtolnay. Parsed channel, or rust-version when toolchain-file is false.'
+    value: ${{ steps.channel.outputs.channel || inputs.rust-version }}
 runs:
   using: composite
   steps:
+    - id: channel
+      if: inputs.toolchain-file == 'true'
+      shell: bash
+      env:
+        RUST_VERSION: ${{ inputs.rust-version }}
+      run: bash "$GITHUB_ACTION_PATH/channel.sh"
+
     - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      if: inputs.toolchain-file != 'true'
       with:
         toolchain: ${{ inputs.rust-version }}
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
+
+    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+      if: inputs.toolchain-file == 'true'
+      with:
+        toolchain: ${{ steps.channel.outputs.channel }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         key: ${{ inputs.cache-key }}

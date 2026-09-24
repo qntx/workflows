@@ -1,0 +1,218 @@
+name: setup-wasm
+description: Install the wasm32 toolchain from the consumer lock and toolchain file, and check the package contract.
+inputs:
+  toolchain:
+    description: 'When true, apt, Rust from the toolchain file, wasm-bindgen-cli, cdylib and package checks, and CC/AR/CFLAGS.'
+    required: false
+    default: 'true'
+  dist-check:
+    description: 'When true, require exports["./wasm"] under dist/ and at least one dist/*.wasm.'
+    required: false
+    default: 'false'
+  apt-packages:
+    description: 'Whitespace-separated apt packages for the wasm C toolchain. Passed to apt-install.'
+    required: false
+    default: 'clang lld llvm'
+  cargo-directory:
+    description: 'Cargo workspace relative to GITHUB_WORKSPACE. Cargo.lock and cargo metadata. Jailed.'
+    required: false
+    default: '.'
+  package-directory:
+    description: 'Package directory relative to GITHUB_WORKSPACE. package.json and dist/. Jailed.'
+    required: false
+    default: '.'
+  package-manager:
+    description: 'bun or npm. Not auto-detected. pnpm and yarn fail before apt.'
+    required: false
+    default: 'bun'
+  cache-key:
+    description: 'Cargo cache key suffix forwarded to setup-rust.'
+    required: false
+    default: 'wasm32'
+  components:
+    description: 'Comma-separated rustup components. Not read from the toolchain file.'
+    required: false
+    default: 'rustfmt, clippy'
+  targets:
+    description: 'Comma-separated rustup targets. Full list, not merged with the toolchain file.'
+    required: false
+    default: 'wasm32-unknown-unknown'
+  install-directory:
+    description: 'Relative directory jailed for the caller. This composite does not install packages there.'
+    required: false
+    default: '.'
+runs:
+  using: composite
+  steps:
+    - name: Require a mode
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.toolchain }}
+        DIST_CHECK: ${{ inputs.dist-check }}
+      run: |
+        set -euo pipefail
+        if [ "$TOOLCHAIN" != true ] && [ "$DIST_CHECK" != true ]; then
+          echo '::error::setup-wasm: toolchain and dist-check are both false'
+          exit 1
+        fi
+
+    - name: Reject package manager
+      shell: bash
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          bun | npm) ;;
+          *)
+            echo '::error::setup-wasm: package-manager must be bun or npm'
+            exit 1
+            ;;
+        esac
+
+    - name: Jail cargo directory
+      id: cargo-dir
+      shell: bash
+      env:
+        REL: ${{ inputs.cargo-directory }}
+      run: bash "$GITHUB_ACTION_PATH/jail.sh"
+
+    - name: Jail package directory
+      id: package-dir
+      shell: bash
+      env:
+        REL: ${{ inputs.package-directory }}
+      run: bash "$GITHUB_ACTION_PATH/jail.sh"
+
+    - name: Jail install directory
+      id: install-dir
+      shell: bash
+      env:
+        REL: ${{ inputs.install-directory }}
+      run: bash "$GITHUB_ACTION_PATH/jail.sh"
+
+    - name: Require Linux
+      if: inputs.toolchain == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${RUNNER_OS}" != Linux ]; then
+          echo '::error::setup-wasm: toolchain requires a Linux runner'
+          exit 1
+        fi
+
+    - name: Install apt packages
+      if: inputs.toolchain == 'true'
+      uses: $/actions/apt-install
+      with:
+        packages: ${{ inputs.apt-packages }}
+
+    - name: Install Rust
+      id: rust
+      if: inputs.toolchain == 'true'
+      uses: $/actions/setup-rust
+      with:
+        toolchain-file: true
+        rust-version: ''
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+        cache-key: ${{ inputs.cache-key }}
+
+    - name: Check rustc channel
+      if: inputs.toolchain == 'true'
+      shell: bash
+      env:
+        WANT: ${{ steps.rust.outputs.channel }}
+      run: |
+        set -euo pipefail
+        got="$(rustc --version | awk '{print $2}')"
+        case "$got" in
+          "$WANT" | "$WANT".*) ;;
+          *)
+            echo "::error::setup-wasm: rustc ${got} does not match channel ${WANT}"
+            exit 1
+            ;;
+        esac
+
+    - name: Check cdylib
+      if: inputs.toolchain == 'true'
+      shell: bash
+      env:
+        CARGO_DIR: ${{ steps.cargo-dir.outputs.path }}
+      run: |
+        set -euo pipefail
+        cd "$CARGO_DIR"
+        cargo metadata --format-version 1 --no-deps --locked --manifest-path Cargo.toml |
+          bash "$GITHUB_ACTION_PATH/check-cdylib.sh"
+
+    - name: Install wasm-bindgen
+      if: inputs.toolchain == 'true'
+      shell: bash
+      env:
+        CARGO_DIR: ${{ steps.cargo-dir.outputs.path }}
+        PM: ${{ inputs.package-manager }}
+      run:
+        | # zizmor: ignore[github-env] jailed cargo dir plus a fixed bin suffix
+        set -euo pipefail
+        cargo_dir="$CARGO_DIR"
+        VER="$(bash "$GITHUB_ACTION_PATH/lockver.sh" "$cargo_dir/Cargo.lock" wasm-bindgen)"
+        case "$VER" in
+          *$'\n'*)
+            echo '::error::setup-wasm: wasm-bindgen version charset'
+            exit 1
+            ;;
+        esac
+        if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo '::error::setup-wasm: wasm-bindgen version charset'
+          exit 1
+        fi
+        install_root="${cargo_dir}/target/wasm-bindgen-cli"
+        bin="${install_root}/bin/wasm-bindgen"
+        if [ -x "$bin" ] && [ "$("$bin" -V | awk '{print $NF}')" = "$VER" ]; then
+          echo "wasm-bindgen ${VER} cache hit"
+          bindgen_note="wasm-bindgen ${VER} cache hit"
+        else
+          cargo install wasm-bindgen-cli --version "$VER" --locked --root "$install_root" --force
+          bindgen_note="wasm-bindgen ${VER} installed"
+        fi
+        echo "${install_root}/bin" >>"$GITHUB_PATH"
+        clang_ver="$(clang --version)"
+        {
+          echo '### wasm toolchain'
+          echo
+          rustc --version
+          cargo --version
+          printf '%s\n' "${clang_ver%%$'\n'*}"
+          "$bin" -V
+          printf '%s\n' "$bindgen_note"
+          printf '%s\n' "package-manager: ${PM}"
+          printf '%s\n' "cargo-directory: ${cargo_dir}"
+        } >>"$GITHUB_STEP_SUMMARY"
+
+    - name: Check package contract
+      if: inputs.toolchain == 'true'
+      shell: bash
+      env:
+        PM: ${{ inputs.package-manager }}
+        PACKAGE_DIR: ${{ steps.package-dir.outputs.path }}
+      run: |
+        set -euo pipefail
+        bash "$GITHUB_ACTION_PATH/check-pkg.sh" "$PACKAGE_DIR/package.json"
+
+    - name: Export wasm compiler env
+      if: inputs.toolchain == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        {
+          printf '%s\n' 'CC_wasm32_unknown_unknown=clang'
+          printf '%s\n' 'AR_wasm32_unknown_unknown=llvm-ar'
+          printf '%s\n' 'CFLAGS_wasm32_unknown_unknown=--target=wasm32-unknown-unknown -Wno-implicit-function-declaration'
+        } >>"$GITHUB_ENV"
+
+    - name: Check dist
+      if: inputs.dist-check == 'true'
+      shell: bash
+      env:
+        PACKAGE_DIR: ${{ steps.package-dir.outputs.path }}
+      run: bash "$GITHUB_ACTION_PATH/check-dist.sh"
