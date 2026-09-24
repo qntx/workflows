@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `setup-rust` input `toolchain-file` (default false) parses `channel` from `rust-toolchain.toml` or a one-line `rust-toolchain` and passes it to dtolnay. Private composite `actions/setup-wasm` installs that toolchain, `wasm-bindgen-cli` from `Cargo.lock`, and the wasm package contract.
 - `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` after checkout and setup-bun. Path jail is TypeScript `resolveDocsRoot`. Local/fan-in CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Root lockfile is repo-dev only.
 
 ### Removed

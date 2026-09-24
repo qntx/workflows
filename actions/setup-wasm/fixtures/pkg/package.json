@@ -1,0 +1,37 @@
+{
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.wasm"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./wasm": {
+      "types": "./dist/wasm.d.mts",
+      "import": "./dist/wasm.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "build:wasm": "bash scripts/build-wasm.sh && WASM_PACK=1 vp pack && ls dist/*.wasm >/dev/null",
+    "test:wasm": "vp test",
+    "prepublishOnly": "bun run build:wasm",
+    "pack:local": "vp pack && bun pm pack",
+    "release": "bumpp --commit --tag --push"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.4.0",
+      "onFail": "ignore"
+    }
+  }
+}
