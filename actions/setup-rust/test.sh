@@ -128,6 +128,10 @@ printf '%s\n' '  1.94  ' >"$ws/rust-toolchain"
 expect_out 'one-line trimmed' '1.94' run_channel
 
 new_ws
+printf '\t1.94\t\n' >"$ws/rust-toolchain"
+expect_out 'one-line tab trimmed' '1.94' run_channel
+
+new_ws
 cat >"$ws/rust-toolchain" <<'EOF'
 
 # comment with 1.94
@@ -170,6 +174,10 @@ cat >"$ws/rust-toolchain.toml" <<'EOF'
   channel="1.94.0"
 EOF
 expect_out 'tight quotes and patch' '1.94.0' run_channel
+
+new_ws
+printf 'channel\t=\t"1.94"\n' >"$ws/rust-toolchain.toml"
+expect_out 'tab around equals' '1.94' run_channel
 
 new_ws
 printf '%s\n' 'channel = "beta"' >"$ws/rust-toolchain.toml"

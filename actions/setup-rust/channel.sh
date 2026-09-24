@@ -14,32 +14,7 @@ trim() {
   printf '%s' "$s"
 }
 
-# Print the quoted channel when the line is `channel = "..."`. Return 1 otherwise.
-channel_line_value() {
-  local line="$1" rest
-  case "$line" in
-    channel=* | channel\ *) ;;
-    *) return 1 ;;
-  esac
-  rest="${line#channel}"
-  rest="$(trim "$rest")"
-  case "$rest" in
-    =*) ;;
-    *) return 1 ;;
-  esac
-  rest="${rest#=}"
-  rest="$(trim "$rest")"
-  case "$rest" in
-    \"*\") ;;
-    *) return 1 ;;
-  esac
-  rest="${rest#\"}"
-  rest="${rest%\"}"
-  case "$rest" in
-    *\"*) return 1 ;;
-  esac
-  printf '%s' "$rest"
-}
+channel_re='^channel[[:space:]]*=[[:space:]]*"([^"]*)"[[:space:]]*$'
 
 if [ -n "${RUST_VERSION:-}" ]; then
   die 'rust-version must be empty when toolchain-file is true'
@@ -77,9 +52,9 @@ while IFS= read -r line || [ -n "$line" ]; do
   case "$trimmed" in
     \#*) continue ;;
   esac
-  if val="$(channel_line_value "$trimmed")"; then
+  if [[ "$trimmed" =~ $channel_re ]]; then
     toml_count=$((toml_count + 1))
-    toml_value="$val"
+    toml_value="${BASH_REMATCH[1]}"
     continue
   fi
   case "$trimmed" in

@@ -348,6 +348,65 @@ expect_fail_msg 'backslash' 'charset' jail 'foo\bar'
 expect_fail_msg 'missing dir' 'does not exist' jail 'missing-dir'
 expect_fail_msg 'file path' 'not a directory' jail 'not-a-dir'
 expect_fail_msg 'symlink escape' 'escapes workspace' jail 'outlink'
+
+mkdir -p "$ws/$(printf 'a\npath=..')/child"
+ln -s "$(printf 'a\npath=..')" "$ws/link"
+mkdir -p "$ws/$(printf 'a\rpath=..')"
+ln -s "$(printf 'a\rpath=..')" "$ws/crlink"
+case "$(realpath "$ws/link")" in
+  *$'\n'path=..*) ;;
+  *)
+    echo 'FAIL newline symlink fixture did not resolve'
+    fail=1
+    ;;
+esac
+case "$(realpath "$ws/link/child")" in
+  *$'\n'path=../child*) ;;
+  *)
+    echo 'FAIL newline child fixture did not resolve'
+    fail=1
+    ;;
+esac
+case "$(realpath "$ws/crlink")" in
+  *$'\r'path=..*) ;;
+  *)
+    echo 'FAIL cr symlink fixture did not resolve'
+    fail=1
+    ;;
+esac
+nl_out="$(mktemp "$root/nlout.XXXXXX")"
+set +e
+nl_got="$(GITHUB_WORKSPACE="$ws" GITHUB_OUTPUT="$nl_out" REL='link' bash "$dir/jail.sh" 2>/dev/null)"
+nl_rc=$?
+set -e
+if [ "$nl_rc" -ne 0 ] && [ -z "$nl_got" ] && ! grep -q '^path=' "$nl_out"; then
+  echo 'ok symlink newline target'
+else
+  echo "FAIL symlink newline target rc=${nl_rc} stdout='${nl_got}' file=$(cat "$nl_out")"
+  fail=1
+fi
+nl_child="$(mktemp "$root/nlchild.XXXXXX")"
+set +e
+nl_child_got="$(GITHUB_WORKSPACE="$ws" GITHUB_OUTPUT="$nl_child" REL='link/child' bash "$dir/jail.sh" 2>/dev/null)"
+nl_child_rc=$?
+set -e
+if [ "$nl_child_rc" -ne 0 ] && [ -z "$nl_child_got" ] && ! grep -q '^path=' "$nl_child"; then
+  echo 'ok symlink newline child'
+else
+  echo "FAIL symlink newline child rc=${nl_child_rc} stdout='${nl_child_got}' file=$(cat "$nl_child")"
+  fail=1
+fi
+cr_out="$(mktemp "$root/crout.XXXXXX")"
+set +e
+cr_got="$(GITHUB_WORKSPACE="$ws" GITHUB_OUTPUT="$cr_out" REL='crlink' bash "$dir/jail.sh" 2>/dev/null)"
+cr_rc=$?
+set -e
+if [ "$cr_rc" -ne 0 ] && [ -z "$cr_got" ] && ! grep -q '^path=' "$cr_out"; then
+  echo 'ok symlink cr target'
+else
+  echo "FAIL symlink cr target rc=${cr_rc} stdout='${cr_got}' file=$(cat "$cr_out")"
+  fail=1
+fi
 expect_fail_msg 'workspace unset' 'GITHUB_WORKSPACE' env -u GITHUB_WORKSPACE REL='.' bash "$dir/jail.sh"
 
 expect_ok 'cdylib publish []' run_cdylib "$(meta_one '[]' '["cdylib","rlib"]' '["id:accel"]' '["cdylib","rlib"]')"
@@ -357,8 +416,7 @@ expect_fail_msg 'publish null' 'publish must be []' run_cdylib "$(meta_one 'null
 expect_fail_msg 'publish registry' 'publish must be []' run_cdylib "$(meta_one '["crates-io"]' '["cdylib"]' '["id:accel"]' '["cdylib"]')"
 expect_fail_msg 'rlib only' 'no cdylib' run_cdylib "$(meta_one '[]' '["rlib"]' '["id:accel"]' '["rlib"]')"
 expect_fail_msg 'no packages' 'no cdylib' run_cdylib '{"packages":[],"workspace_members":[]}'
-expect_ok 'members omitted' run_cdylib "$(meta_one '[]' '["cdylib"]' omit '["cdylib"]')"
-expect_fail_msg 'members omitted publish null' 'publish must be []' run_cdylib "$(meta_one 'null' '["cdylib"]' omit '["cdylib"]')"
+expect_fail_msg 'missing workspace_members' 'no cdylib' run_cdylib "$(meta_one '[]' '["cdylib"]' omit '["cdylib"]')"
 run_empty() {
   bash "$dir/check-cdylib.sh" </dev/null
 }

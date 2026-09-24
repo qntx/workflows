@@ -16,21 +16,12 @@ if [ -z "$json" ]; then
 fi
 
 if ! out="$(jq -r '
-  def selected:
-    . as $root
-    | [
-        $root.packages[]?
-        | select(
-            . as $pkg
-            | if ($root.workspace_members | type) == "array" then
-                (($root.workspace_members | index($pkg.id)) != null)
-              else
-                true
-              end
-          )
-        | select(any(.targets[]?; any((.crate_types // [])[]?; . == "cdylib")))
-      ];
-  selected as $pkgs
+  . as $root
+  | [
+      $root.packages[]
+      | select(. as $pkg | ($root.workspace_members | index($pkg.id)) != null)
+      | select(any(.targets[]; any(.crate_types[]; . == "cdylib")))
+    ] as $pkgs
   | if ($pkgs | length) == 0 then
       "none"
     elif ($pkgs | map(select(.publish != [])) | length) > 0 then

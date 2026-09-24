@@ -66,9 +66,30 @@ fi
 if [ ! -d "$root/$rel" ]; then
   die 'path is not a directory'
 fi
-if ! joined="$(realpath "$root/$rel")"; then
+# REL can pass the charset while a symlink target contains CR, LF, or NUL.
+# Those bytes split stdout and GITHUB_OUTPUT into extra workflow commands.
+raw_file="$(mktemp)"
+if ! realpath "$root/$rel" >"$raw_file"; then
+  rm -f "$raw_file"
   die 'path realpath failed'
 fi
+if ! joined="$(awk '
+  NR > 1 { bad = 1; exit 1 }
+  index($0, "\r") > 0 { bad = 1; exit 1 }
+  { line = $0 }
+  END {
+    if (bad || NR != 1) exit 1
+    printf "%s", line
+  }
+' "$raw_file")"; then
+  rm -f "$raw_file"
+  die 'resolved path contains CR, LF, or NUL'
+fi
+if [ -z "$joined" ] || ! printf '%s\n' "$joined" | cmp -s - "$raw_file"; then
+  rm -f "$raw_file"
+  die 'resolved path contains CR, LF, or NUL'
+fi
+rm -f "$raw_file"
 
 # Prefix check, not a glob: a workspace named `foo` must not accept `foo-evil`.
 if [ "$joined" != "$root" ] && [ "${joined#"$root"/}" = "$joined" ]; then
