@@ -35,14 +35,14 @@ runs:
         RUST_VERSION: ${{ inputs.rust-version }}
       run: bash "$GITHUB_ACTION_PATH/channel.sh"
 
-    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+    - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
       if: inputs.toolchain-file != 'true'
       with:
         toolchain: ${{ inputs.rust-version }}
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
 
-    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+    - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
       if: inputs.toolchain-file == 'true'
       with:
         toolchain: ${{ steps.channel.outputs.channel }}
