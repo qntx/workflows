@@ -1,0 +1,27 @@
+# Caller owns on:. Pin at @v2.
+# ci-bun stays the Rust-free job. This job is the wasm build.
+# Required check-run: wasm / ci. Do not set jobs.wasm.name.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-bun.yml@v2
+    permissions:
+      contents: read
+
+  wasm:
+    uses: qntx/workflows/.github/workflows/ci-wasm.yml@v2
+    permissions:
+      contents: read
+    with:
+      package-manager: bun
+      bench: true
