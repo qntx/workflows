@@ -57,6 +57,16 @@ on:
         required: false
         type: boolean
         default: true
+      wasm:
+        description: 'When true, setup-wasm runs in the publish job and npm publish gets --ignore-scripts after one build:wasm. Callers set timeout-minutes to 30. Default false keeps the current publish path and the 15 minute timeout.'
+        required: false
+        type: boolean
+        default: false
+      cargo-directory:
+        description: 'Cargo workspace relative to the repository root. Used only when wasm is true. Jailed. Lockfile lookup only. No wasm-bindgen version override.'
+        required: false
+        type: string
+        default: '.'
     secrets:
       NPM_TOKEN:
         description: 'Optional. When set, token path is used and provenance is off.'
@@ -111,6 +121,18 @@ jobs:
       - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+      - name: Set up wasm toolchain
+        if: ${{ inputs.wasm }}
+        uses: $/actions/setup-wasm
+        with:
+          toolchain: true
+          dist-check: false
+          cargo-directory: ${{ inputs.cargo-directory }}
+          package-directory: ${{ inputs.working-directory }}
+          package-manager: ${{ inputs.package-manager }}
+          install-directory: ${{ inputs.install-directory }}
+          targets: wasm32-unknown-unknown
+          cache-key: wasm32
       - id: run
         uses: $/actions/publish-npm
         with:
@@ -122,6 +144,7 @@ jobs:
           access: ${{ inputs.access }}
           registry-url: ${{ inputs.registry-url }}
           provenance: false
+          wasm: ${{ inputs.wasm }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -141,6 +164,18 @@ jobs:
       - uses: $/actions/hardened-checkout
         with:
           persist-credentials: false
+      - name: Set up wasm toolchain
+        if: ${{ inputs.wasm }}
+        uses: $/actions/setup-wasm
+        with:
+          toolchain: true
+          dist-check: false
+          cargo-directory: ${{ inputs.cargo-directory }}
+          package-directory: ${{ inputs.working-directory }}
+          package-manager: ${{ inputs.package-manager }}
+          install-directory: ${{ inputs.install-directory }}
+          targets: wasm32-unknown-unknown
+          cache-key: wasm32
       - id: run
         uses: $/actions/publish-npm
         with:
@@ -152,3 +187,4 @@ jobs:
           access: ${{ inputs.access }}
           registry-url: ${{ inputs.registry-url }}
           provenance: true
+          wasm: ${{ inputs.wasm }}

@@ -92,6 +92,44 @@ bun validate-docs-tree.ts "$docsDir" --lint
 
 `--lint` loads sibling `docs-tree.markdownlint.jsonc`. Absolute `<docs-dir>` is allowed.
 
+### ci-wasm
+
+Rust-free CI stays `ci-bun.yml`. Wasm CI is a sibling job. Caller job id `wasm`. Do not set `jobs.wasm.name`. Check-run is `wasm / ci`. Pin `@v2`. `@v2` does not move on merge; `Self / Retag` moves it. Do not `uses:` `actions/setup-wasm`. Bindgen version is not an input.
+
+`timeout-minutes` may be omitted (default 30). `bun-version` may be omitted (default `1.4`, not `latest`, not `1.4.0`). `package-manager` is `bun` or `npm`. Copy `examples/ci-wasm.yml`.
+
+Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-directory` (`.`), `install-directory` (`.`), `cargo-directory` (`.`), `submodules` (`false`), `package-manager` (`bun`), `bun-version` (`1.4`), `node-version` (`24`, not installed on the bun path), `bench` (`false`), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`).
+
+```yaml
+# Caller owns on:. Pin at @v2.
+# ci-bun stays the Rust-free job. This job is the wasm build.
+# Required check-run: wasm / ci. Do not set jobs.wasm.name.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-bun.yml@v2
+    permissions:
+      contents: read
+
+  wasm:
+    uses: qntx/workflows/.github/workflows/ci-wasm.yml@v2
+    permissions:
+      contents: read
+    with:
+      package-manager: bun
+      bench: true
+```
+
 ## Publish / npm
 
 OIDC (no `NPM_TOKEN`):
@@ -133,6 +171,38 @@ jobs:
 ```
 
 Each npm package needs its own Trusted Publisher (or `NPM_TOKEN`). Caller owns which packages to publish; this workflow does not scan git diffs or run Changesets.
+
+### wasm
+
+Set `wasm: true` only together with `timeout-minutes: 30` (`with:`, not a job key). That path runs `setup-wasm` in the publish job, runs `build:wasm` once, and adds `--ignore-scripts`. `wasm: false` keeps the current publish path and the 15 minute timeout. Do not pass a bindgen version. Do not `uses:` `actions/setup-wasm`. `@v2` does not move on merge. Copy `examples/publish-npm-wasm.yml`.
+
+Token job stays `provenance: false`. OIDC job stays `provenance: true`. The workflow `provenance` input does not override those.
+
+```yaml
+# Caller owns on:. Pin at @v2.
+# OIDC. Do not pass NPM_TOKEN. Do not set environment, runs-on, or steps.
+# Required check-run on a tag: publish / publish.
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: qntx/workflows/.github/workflows/publish-npm.yml@v2
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      package-manager: bun
+      wasm: true
+      timeout-minutes: 30
+```
 
 ## Publish / PyPI
 

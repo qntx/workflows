@@ -26,6 +26,10 @@ inputs:
     description: 'Pass --provenance to npm publish (OIDC job only).'
     required: false
     default: 'false'
+  wasm:
+    description: 'Skip the generic build, run build:wasm once, publish with --ignore-scripts. Requires setup-wasm earlier in the job.'
+    required: false
+    default: 'false'
 outputs:
   package:
     value: ${{ steps.pkg.outputs.package }}
@@ -94,23 +98,44 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         PM: ${{ inputs.package-manager }}
+        WASM: ${{ inputs.wasm }}
       run: |
         set -euo pipefail
-        case "$PM" in
-          npm)
-            npm run build --if-present
-            ;;
-          bun)
-            if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-              bun run build
-            fi
-            ;;
-          *)
-            if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-              "$PM" run build
-            fi
-            ;;
-        esac
+        if [ "$WASM" = true ]; then
+          case "$PM" in
+            bun) bun run build:wasm ;;
+            npm) npm run build:wasm ;;
+            *)
+              echo "::error::Unsupported package manager: $PM"
+              exit 1
+              ;;
+          esac
+        else
+          case "$PM" in
+            npm)
+              npm run build --if-present
+              ;;
+            bun)
+              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+                bun run build
+              fi
+              ;;
+            *)
+              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+                "$PM" run build
+              fi
+              ;;
+          esac
+        fi
+
+    - name: Check wasm dist
+      if: ${{ inputs.wasm == 'true' }}
+      uses: $/actions/setup-wasm
+      with:
+        toolchain: false
+        dist-check: true
+        package-directory: ${{ inputs.working-directory }}
+        package-manager: ${{ inputs.package-manager }}
 
     - name: Test
       shell: bash
@@ -151,10 +176,14 @@ runs:
       env:
         ACCESS: ${{ inputs.access }}
         PROVENANCE: ${{ inputs.provenance }}
+        WASM: ${{ inputs.wasm }}
       run: |
         set -euo pipefail
+        args=(--access "$ACCESS")
         if [ "$PROVENANCE" = true ]; then
-          npm publish --access "$ACCESS" --provenance
-        else
-          npm publish --access "$ACCESS"
+          args+=(--provenance)
         fi
+        if [ "$WASM" = true ]; then
+          args+=(--ignore-scripts)
+        fi
+        npm publish "${args[@]}"
