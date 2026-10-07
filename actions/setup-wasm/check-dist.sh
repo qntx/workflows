@@ -23,9 +23,17 @@ if ! jq -e . "$pkg" >/dev/null 2>&1; then
   die 'package.json is not valid JSON'
 fi
 
+export_key="${DIST_EXPORT:-./wasm}"
+case "$export_key" in
+  ./) die 'dist-export is empty' ;;
+  ./*[!A-Za-z0-9._/-]* | ./*/) die 'dist-export charset' ;;
+  ./*) ;;
+  *) die 'dist-export must start with ./' ;;
+esac
+
 # `.import` on a string export is a jq error, not null, so branch on type first.
-rel="$(jq -r '
-  .exports["./wasm"] as $w
+rel="$(jq -r --arg e "$export_key" '
+  .exports[$e] as $w
   | if $w == null then ""
     elif ($w | type) == "string" then $w
     elif ($w | type) == "object" and ($w.import | type) == "string" then $w.import
@@ -33,7 +41,7 @@ rel="$(jq -r '
     end
 ' "$pkg")"
 if [ -z "$rel" ]; then
-  die 'exports["./wasm"] is missing'
+  die "exports[\"${export_key}\"] is missing"
 fi
 
 case "$rel" in
@@ -42,7 +50,7 @@ esac
 
 case "$rel" in
   dist/*) ;;
-  *) die 'exports["./wasm"] must point at dist/' ;;
+  *) die "exports[\"${export_key}\"] must point at dist/" ;;
 esac
 
 old_ifs="$IFS"
@@ -52,7 +60,7 @@ for seg in $rel; do
   if [ -z "$seg" ] || [ "$seg" = .. ]; then
     set +f
     IFS="$old_ifs"
-    die 'exports["./wasm"] path is not safe'
+    die "exports[\"${export_key}\"] path is not safe"
   fi
 done
 set +f

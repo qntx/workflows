@@ -1,0 +1,203 @@
+name: CI / Rust cross
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: 'Whitespace-separated rustup target triples. apple-ios targets build on macos-latest; everything else on ubuntu-latest.'
+        required: true
+        type: string
+      packages:
+        description: 'Whitespace-separated cargo package names to build.'
+        required: true
+        type: string
+      features:
+        description: 'Cargo feature flags: --all-features, --no-default-features, or --features <list>.'
+        required: false
+        type: string
+        default: '--no-default-features'
+      forbid-deps:
+        description: 'Whitespace-separated crate names that must not appear in the normal dependency graph of any package for any target.'
+        required: false
+        type: string
+        default: ''
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      rust-version:
+        description: 'Rust toolchain. Empty honours the working-directory rust-toolchain file, else stable.'
+        required: false
+        type: string
+        default: ''
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        env:
+          TARGETS: ${{ inputs.targets }}
+          PACKAGES: ${{ inputs.packages }}
+          FEATURES: ${{ inputs.features }}
+          FORBID: ${{ inputs.forbid-deps }}
+        run: |
+          set -euo pipefail
+          case "$FEATURES" in
+            --all-features | --no-default-features) ;;
+            --features\ *)
+              rest="${FEATURES#--features }"
+              if ! [[ "$rest" =~ ^[A-Za-z0-9_,-]+$ ]]; then
+                echo '::error::features list must match [A-Za-z0-9_,-]+'
+                exit 1
+              fi
+              ;;
+            *)
+              echo '::error::features must be --all-features, --no-default-features, or --features <list>'
+              exit 1
+              ;;
+          esac
+          entries=()
+          # word-split is intentional: whitespace-separated triples
+          # shellcheck disable=SC2086
+          for t in $TARGETS; do
+            if ! [[ "$t" =~ ^[a-z0-9_-]+$ ]]; then
+              echo "::error::targets entry charset: ${t}"
+              exit 1
+            fi
+            case "$t" in
+              *apple-ios*) os='macos-latest' ;;
+              *) os='ubuntu-latest' ;;
+            esac
+            entries+=("{\"target\":\"${t}\",\"os\":\"${os}\"}")
+          done
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo '::error::targets is empty'
+            exit 1
+          fi
+          # shellcheck disable=SC2086
+          for p in $PACKAGES; do
+            if ! [[ "$p" =~ ^[A-Za-z0-9_-]+$ ]]; then
+              echo "::error::packages entry charset: ${p}"
+              exit 1
+            fi
+          done
+          # shellcheck disable=SC2086
+          for d in $FORBID; do
+            if ! [[ "$d" =~ ^[A-Za-z0-9_-]+$ ]]; then
+              echo "::error::forbid-deps entry charset: ${d}"
+              exit 1
+            fi
+          done
+          IFS=,
+          printf 'matrix=%s\n' "{\"include\":[${entries[*]}]}" >>"$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.target }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CARGO_TERM_COLOR: always
+      FEATURES: ${{ inputs.features }}
+      FORBID: ${{ inputs.forbid-deps }}
+      PACKAGES: ${{ inputs.packages }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - uses: $/actions/setup-rust
+        with:
+          rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}
+          targets: ${{ matrix.target }}
+
+      - name: Apt wasm toolchain
+        if: ${{ matrix.target == 'wasm32-unknown-unknown' }}
+        uses: $/actions/apt-install
+        with:
+          packages: clang lld llvm
+
+      - name: Export wasm compiler env
+        if: ${{ matrix.target == 'wasm32-unknown-unknown' }}
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' 'CC_wasm32_unknown_unknown=clang'
+            printf '%s\n' 'AR_wasm32_unknown_unknown=llvm-ar'
+            printf '%s\n' 'CFLAGS_wasm32_unknown_unknown=--target=wasm32-unknown-unknown -Wno-implicit-function-declaration'
+          } >>"$GITHUB_ENV"
+
+      - name: Android NDK
+        if: ${{ contains(matrix.target, 'android') }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_NDK_LATEST_HOME:-}" ]; then
+            echo '::error::ANDROID_NDK_LATEST_HOME is not set on this runner'
+            exit 1
+          fi
+          # cargo-ndk reads ANDROID_NDK_HOME; the runner only exposes LATEST_HOME.
+          printf 'ANDROID_NDK_HOME=%s\n' "$ANDROID_NDK_LATEST_HOME" >>"$GITHUB_ENV" # zizmor: ignore[github-env] runner-provided path
+          # cargo-ndk 4.1.2 (released 2025-08-09): newest release when pinned.
+          cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          # word-split is intentional: package list and feature flags
+          # shellcheck disable=SC2086
+          for pkg in $PACKAGES; do
+            case "$TARGET" in
+              *android*) cargo ndk -t "$TARGET" build -p "$pkg" $FEATURES ;;
+              *) cargo build --target "$TARGET" -p "$pkg" $FEATURES ;;
+            esac
+          done
+
+      - name: Forbid deps
+        if: ${{ inputs.forbid-deps != '' }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional: package list and feature flags
+          # shellcheck disable=SC2086
+          for pkg in $PACKAGES; do
+            names="$(cargo tree -p "$pkg" -e normal --target "$TARGET" $FEATURES \
+              --prefix none --format '{p}' | awk '{print $1}')"
+            # shellcheck disable=SC2086
+            for dep in $FORBID; do
+              if printf '%s\n' "$names" | grep -Fxq "$dep"; then
+                echo "::error::forbidden dependency ${dep} in ${pkg} for ${TARGET}"
+                exit 1
+              fi
+            done
+          done

@@ -64,6 +64,25 @@ publish_one() {
   return 1
 }
 
+if [ "${DRY_RUN:-}" = true ]; then
+  # cargo stages packed members into a local registry, so a multi-package
+  # dry-run resolves unpublished path deps in topological order. A per-package
+  # loop would fail on any member whose sibling is not yet on crates.io.
+  local_args=(--locked --dry-run)
+  if [ -n "${PACKAGES:-}" ]; then
+    if ! printf '%s' "$PACKAGES" | grep -Eq '^[A-Za-z0-9_[:space:]-]+$'; then
+      echo '::error::packages charset'
+      exit 1
+    fi
+    # shellcheck disable=SC2086
+    for pkg in $PACKAGES; do
+      local_args+=(-p "$pkg")
+    done
+  fi
+  cargo publish "${local_args[@]}"
+  exit $?
+fi
+
 if [ -n "${PACKAGES:-}" ]; then
   if ! printf '%s' "$PACKAGES" | grep -Eq '^[A-Za-z0-9_[:space:]-]+$'; then
     echo '::error::packages charset'

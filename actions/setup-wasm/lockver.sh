@@ -73,10 +73,14 @@ END {
     n++
     only = v
   }
+  if (n == 0) {
+    printf "absent\n"
+    exit 0
+  }
   if (n != 1) exit 1
   printf "%s\n", only
 }
 ' "$1"; then
-  echo "::error::setup-wasm: lockver: ${2} missing or not a single version" >&2
+  echo "::error::setup-wasm: lockver: ${2} has multiple versions" >&2
   exit 1
 fi

@@ -1,0 +1,106 @@
+name: CI / Hermes
+
+on:
+  workflow_call:
+    inputs:
+      hermes-commit:
+        description: 'facebook/hermes commit to build, 40 lowercase hex. The build is cached per commit.'
+        required: true
+        type: string
+      script:
+        description: 'Package script run with HERMES pointing at the built CLI.'
+        required: false
+        type: string
+        default: 'smoke:hermes'
+      bun-version:
+        description: 'Bun version. Not latest.'
+        required: false
+        type: string
+        default: '1.4'
+      working-directory:
+        description: 'Package directory for install and the script. Relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      timeout-minutes:
+        description: 'Job timeout in minutes. An uncached Hermes build takes most of it.'
+        required: false
+        type: number
+        default: 30
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  HERMES_COMMIT: ${{ inputs.hermes-commit }}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          if ! [[ "$HERMES_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::hermes-commit must be 40 lowercase hex'
+            exit 1
+          fi
+          if ! [[ "$SCRIPT" =~ ^[A-Za-z0-9:_.-]+$ ]]; then
+            echo '::error::script charset'
+            exit 1
+          fi
+        env:
+          SCRIPT: ${{ inputs.script }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - id: hermes
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/hermes-build
+          key: hermes-${{ runner.os }}-${{ env.HERMES_COMMIT }}
+
+      - name: Install Hermes build dependencies
+        if: steps.hermes.outputs.cache-hit != 'true'
+        uses: $/actions/apt-install
+        with:
+          packages: cmake ninja-build libicu-dev python3
+
+      - name: Build hermes
+        if: steps.hermes.outputs.cache-hit != 'true'
+        working-directory: /
+        run: |
+          set -euo pipefail
+          mkdir -p ~/hermes-src
+          git -C ~/hermes-src init
+          git -C ~/hermes-src remote add origin https://github.com/facebook/hermes.git
+          git -C ~/hermes-src fetch --depth 1 origin "$HERMES_COMMIT"
+          git -C ~/hermes-src checkout FETCH_HEAD
+          cmake -S ~/hermes-src -B ~/hermes-build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build ~/hermes-build --target hermes
+
+      - name: Smoke
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: HERMES="$HOME/hermes-build/bin/hermes" bun run "$SCRIPT"

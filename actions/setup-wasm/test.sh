@@ -141,7 +141,7 @@ name = "wasm-bindgen-macro"
 version = "0.2.122"
 EOF
 )"
-expect_fail_silent 'macro only is not wasm-bindgen' bash "$dir/lockver.sh" "$macro_only" wasm-bindgen
+expect_out 'macro only is absent' 'absent' bash "$dir/lockver.sh" "$macro_only" wasm-bindgen
 
 differ="$(lock_file <<'EOF'
 version = 4
@@ -194,7 +194,7 @@ only4="$(lock_file <<'EOF'
 version = 4
 EOF
 )"
-expect_fail_silent 'top-level version = 4' bash "$dir/lockver.sh" "$only4" wasm-bindgen
+expect_out 'top-level version = 4 is absent' 'absent' bash "$dir/lockver.sh" "$only4" wasm-bindgen
 
 quoted4="$(lock_file <<'EOF'
 version = "4"
@@ -234,7 +234,7 @@ dependencies = [
 ]
 EOF
 )"
-expect_fail_silent 'dependency string is not a package' bash "$dir/lockver.sh" "$deps" wasm-bindgen
+expect_out 'dependency string is absent' 'absent' bash "$dir/lockver.sh" "$deps" wasm-bindgen
 
 meta="$(lock_file <<'EOF'
 version = 4
@@ -248,7 +248,7 @@ name = "wasm-bindgen"
 version = "9.9.9"
 EOF
 )"
-expect_fail_silent 'metadata is not a package table' bash "$dir/lockver.sh" "$meta" wasm-bindgen
+expect_out 'metadata is absent' 'absent' bash "$dir/lockver.sh" "$meta" wasm-bindgen
 
 cli="$(lock_file <<'EOF'
 [[package]]
@@ -256,7 +256,9 @@ name = "wasm-bindgen-cli"
 version = "0.2.122"
 EOF
 )"
-expect_fail_silent 'cli name is not wasm-bindgen' bash "$dir/lockver.sh" "$cli" wasm-bindgen
+expect_out 'cli name is absent' 'absent' bash "$dir/lockver.sh" "$cli" wasm-bindgen
+
+expect_out 'empty lock is absent' 'absent' bash "$dir/lockver.sh" "$only4" some-other-crate
 
 alpha="$(lock_file <<'EOF'
 [[package]]
@@ -582,6 +584,14 @@ mv "$no_export/package.json.tmp" "$no_export/package.json"
 expect_fail_msg 'dist export deleted' 'exports["./wasm"] is missing' env PACKAGE_DIR="$no_export" bash "$dir/check-dist.sh"
 expect_fail_msg 'dist dir missing' 'package directory' env PACKAGE_DIR="$root/no-such-pkg" bash "$dir/check-dist.sh"
 
+custom="$(copy_pkg)"
+jq '.exports["./custom"] = .exports["./wasm"] | del(.exports["./wasm"])' "$custom/package.json" >"$custom/package.json.tmp"
+mv "$custom/package.json.tmp" "$custom/package.json"
+expect_ok 'dist custom export' env PACKAGE_DIR="$custom" DIST_EXPORT='./custom' bash "$dir/check-dist.sh"
+expect_fail_msg 'dist custom default misses' 'exports["./wasm"] is missing' env PACKAGE_DIR="$custom" bash "$dir/check-dist.sh"
+expect_fail_msg 'dist-export charset' 'dist-export' env PACKAGE_DIR="$custom" DIST_EXPORT='wasm' bash "$dir/check-dist.sh"
+expect_fail_msg 'dist-export bad key charset' 'dist-export' env PACKAGE_DIR="$custom" DIST_EXPORT='./w"asm' bash "$dir/check-dist.sh"
+
 action="$dir/action.yml"
 
 re='^[0-9]+\.[0-9]+\.[0-9]+$'
@@ -642,7 +652,10 @@ if [ "$(grep -c 'jail.sh' "$action")" -eq 3 ] &&
   grep -F "default: 'bun'" "$action" >/dev/null &&
   grep -F "default: 'true'" "$action" >/dev/null &&
   grep -F "default: 'false'" "$action" >/dev/null &&
-  grep -F 'lockver.sh" "$cargo_dir/Cargo.lock" wasm-bindgen' "$action" >/dev/null; then
+  grep -F 'lockver.sh" "$cargo_dir/Cargo.lock" wasm-bindgen' "$action" >/dev/null &&
+  grep -F "default: './wasm'" "$action" >/dev/null &&
+  grep -F 'DIST_EXPORT: ${{ inputs.dist-export }}' "$action" >/dev/null &&
+  grep -F 'wasm-bindgen absent from Cargo.lock; cli skipped' "$action" >/dev/null; then
   echo 'ok action contract'
 else
   echo 'FAIL action contract'

@@ -1,0 +1,16 @@
+[package]
+name = "fixture-cross"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+default = []
+itoa = ["dep:itoa"]
+
+[dependencies]
+itoa = { version = "1", optional = true }
+
+[build-dependencies]
+cc = "1"

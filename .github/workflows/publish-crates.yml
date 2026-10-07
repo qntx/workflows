@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ''
+      dry-run:
+        description: 'Run cargo publish --dry-run only (no upload, no token needed).'
+        required: false
+        type: boolean
+        default: false
       rust-version:
         description: 'Rust toolchain. Empty honours the working-directory rust-toolchain file, else stable.'
         required: false
@@ -35,8 +40,8 @@ on:
         default: ''
     secrets:
       CARGO_REGISTRY_TOKEN:
-        description: 'Cargo registry token for publishing.'
-        required: true
+        description: 'Cargo registry token for publishing. Not used when dry-run is true.'
+        required: false
 
 permissions:
   contents: read
@@ -70,21 +75,10 @@ jobs:
           rust-version: ${{ inputs.rust-version }}
           working-directory: ${{ inputs.working-directory }}
 
-      - name: Format
-        run: cargo fmt --all --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      - name: Build
-        run: cargo build --workspace --release --verbose
-
-      - name: Test
-        run: cargo test --workspace --verbose
-
       - uses: $/actions/publish-crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         with:
           packages: ${{ inputs.packages }}
+          dry-run: ${{ inputs.dry-run }}
           working-directory: ${{ inputs.working-directory }}

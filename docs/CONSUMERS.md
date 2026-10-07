@@ -109,7 +109,37 @@ Rust-free CI stays `ci-bun.yml`. Wasm CI is a sibling job. Caller job id `wasm`.
 
 `timeout-minutes` may be omitted (default 30). `bun-version` may be omitted (default `1.4`, not `latest`, not `1.4.0`). `package-manager` is `bun` or `npm`. Copy `examples/ci-wasm.yml`.
 
-Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-directory` (`.`), `install-directory` (`.`), `cargo-directory` (`.`), `submodules` (`false`), `package-manager` (`bun`), `bun-version` (`1.4`), `node-version` (`24`, not installed on the bun path), `bench` (`false`), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`).
+Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-directory` (`.`), `install-directory` (`.`), `cargo-directory` (`.`), `submodules` (`false`), `package-manager` (`bun`), `bun-version` (`1.4`), `node-version` (`24`, not installed on the bun path), `bench` (`false`), `rust-checks` (`true`; set `false` when a sibling `ci-rust` job already runs fmt/clippy/test), `scripts` (`''`; whitespace-separated extra package scripts run after `test:wasm`/`bench:wasm`), `dist-export` (`./wasm`), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`).
+
+### ci-rust-cross
+
+Cross-target `cargo build` matrix for `targets` (required, whitespace-separated triples) and `packages` (required, whitespace-separated names). `*-apple-ios*` runs on `macos-latest`; android targets run via `cargo-ndk` on `ubuntu-latest` (uses the runner's `ANDROID_NDK_LATEST_HOME`); everything else on `ubuntu-latest`. `features` defaults `--no-default-features`. `forbid-deps` lists crate names that must not appear in `cargo tree -e normal` for any package/target.
+
+```yaml
+jobs:
+  cross:
+    uses: qntx/workflows/.github/workflows/ci-rust-cross.yml@v2
+    permissions:
+      contents: read
+    with:
+      targets: wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
+      packages: my-crate
+      forbid-deps: tokio
+```
+
+### ci-hermes
+
+Builds facebook/hermes at `hermes-commit` (required, 40 lowercase hex) on ubuntu, caches the build per commit, then runs `script` (default `smoke:hermes`) with `HERMES` pointing at the built CLI. An uncached build is slow; keep `timeout-minutes` generous.
+
+```yaml
+jobs:
+  hermes:
+    uses: qntx/workflows/.github/workflows/ci-hermes.yml@v2
+    permissions:
+      contents: read
+    with:
+      hermes-commit: 3477757eb2475555cf8d8df24bfb1deb0613880d
+```
 
 ```yaml
 # Caller owns on:. Pin at @v2.
@@ -239,7 +269,7 @@ The workflow secret id is `PYPI_TOKEN`, not `PYPI_API_TOKEN`.
 
 ## Publish / crates.io
 
-No OIDC.
+No OIDC. The workflow does not re-run fmt/clippy/build/test — `cargo publish` verifies the package build and CI already gates the tagged commit.
 
 ```yaml
 permissions:
@@ -247,6 +277,8 @@ permissions:
 secrets:
   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 ```
+
+`dry-run: true` runs `cargo publish -p <each> --dry-run --locked` in one invocation (topological order, unpublished path deps resolve between listed members) and does not need `CARGO_REGISTRY_TOKEN`.
 
 ## Publish / container
 
