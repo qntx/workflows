@@ -14,9 +14,20 @@ GitHub intersects caller job `permissions` with the callee. Org `default_workflo
 
 Do not `uses:` anything under `actions/`. Nested `uses:` jobs may set only `name`, `uses`, `with`, `secrets`, `strategy`, `needs`, `if`, `concurrency`, `permissions`. Do not set `timeout-minutes`, `runs-on`, `steps`, or `environment` on the calling job.
 
+`ci-*` callees declare no `concurrency`. Serialisation is the caller's job:
+
+```yaml
+jobs:
+  ci:
+    uses: qntx/workflows/.github/workflows/ci-rust.yml@v2
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+```
+
 Do not pass `github.event.*` (issue titles, PR bodies, review comments) into `*-command` inputs. Those run via `bash -c` as the trusted caller.
 
-`ci-rust.yml` `deny: true` requires a Linux runner (cargo-deny-action is Docker). `features` must be `--all-features`, `--no-default-features`, or `--features <list>`.
+`ci-rust.yml` `deny: true` requires a Linux runner (cargo-deny-action is Docker). `features` must be `--all-features`, `--no-default-features`, or `--features <list>`. `rust-version` default `''` honours `<working-directory>/rust-toolchain.toml` or `rust-toolchain`, else `stable`; a non-empty value wins over the file. `doc: true` adds `cargo doc --workspace --no-deps` under `RUSTDOCFLAGS="-D warnings"`; `package-check: true` adds `cargo publish --workspace --dry-run --locked`.
 
 `astral-sh/setup-uv` is pinned at v10. This repository sets `enable-cache: true` or `false` explicitly. Do not use `auto`: v10 turns cache off on tag push, `release`, `pull_request_target`, and `workflow_run`.
 

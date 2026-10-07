@@ -17,7 +17,7 @@ Consumers pin every public file at `@v2`. `@v2` is stale until `Self / Retag`.
 | `ci-go.yml`             | `CI / Go`             | `ci`                           | `go mod tidy` drift, `vet`, optional golangci-lint (`golangci-lint-version` default `v2.13`), race.                                                             |
 | `ci-node.yml`           | `CI / Node.js`        | `ci`                           | Node version matrix. `package-manager`: `npm` / `pnpm` / `yarn`. Not auto-detected.                                                                             |
 | `ci-python.yml`         | `CI / Python`         | `ci`                           | uv + ruff + pytest. `pyproject.toml` or `requirements.txt`.                                                                                                     |
-| `ci-rust.yml`           | `CI / Rust`           | `ci`                           | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny). Debian-like runner.                                                                    |
+| `ci-rust.yml`           | `CI / Rust`           | `ci`                           | fmt / clippy `-D warnings` / build / test. Optional `deny` (cargo-deny), `doc`, `package-check`. Debian-like runner.                                            |
 | `ci-docs.yml`           | `CI / Docs`           | `ci`                           | Validate a Fumadocs library tree (`docs-path` default `docs`). `bun-version` default `1.4`.                                                                     |
 | `ci-wasm.yml`           | `CI / WASM`           | `ci`                           | wasm32 toolchain, host fmt/clippy/test of the workspace, `build:wasm`, `test:wasm`, optional `bench:wasm`. Debian runner. `package-manager` `bun` or `npm`.     |
 | `publish-npm.yml`       | `Publish / npm`       | `route`, `publish` \| `oidc`   | `route` picks token vs OIDC. Token job `publish`; OIDC job `oidc`. Both `name: publish`. Optional `wasm` (default false); `--ignore-scripts` only on that path. |
@@ -36,9 +36,13 @@ Shared CI inputs (declared on every `ci-*`): `runs-on` (default `ubuntu-latest`)
 
 `ci-docs.yml` extra inputs: `bun-version` (default `1.4`), `docs-path` (default `docs`, relative to `working-directory`). Those paths are jailed inside `GITHUB_WORKSPACE`. Fan-in/local CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Do not `bun install` at the workflows root for the validator.
 
+`ci-rust.yml` extra inputs: `rust-version` (default `''`: honours `<working-directory>/rust-toolchain.toml` or `rust-toolchain`, else `stable`; a non-empty value wins over the file via `RUSTUP_TOOLCHAIN`), `features` (default `--all-features`), `deny` (`false`), `deny-args` (`--all-features`), `doc` (`false`), `package-check` (`false`), `apt-packages` (`''`). `publish-crates.yml` and `release-rust.yml` share the `rust-version` default `''` semantics.
+
+`ci-*` workflows declare no `concurrency`; serialisation is the caller's job (`concurrency` is allowed on the `uses:` job). deploy / publish / release / ops callees keep their groups and key them on `${{ github.workflow }}`.
+
 `ci-wasm.yml` extra inputs: `install-directory` (`.`), `cargo-directory` (`.`), `package-manager` (`bun` or `npm`), `bun-version` (`1.4`), `node-version` (`24`, npm path only), `bench` (`false`), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`). No `wasm-bindgen-version`. `publish-npm.yml` `wasm` defaults false. Callers that set `wasm: true` set `timeout-minutes: 30`. The publish timeout default stays 15.
 
-Acceptance grep must print nothing. `actions/setup-wasm/fixtures/` and `actions/setup-wasm/test.sh` may contain `0.2.122` and `1.94`.
+Acceptance grep must print nothing. `actions/setup-wasm/fixtures/`, `actions/setup-wasm/test.sh`, `actions/setup-rust/test.sh`, and `fixtures/rust/rust-toolchain.toml` may contain `0.2.122` and `1.94`.
 
 ```bash
 grep -RInE '0\.2\.122|1\.94' \
@@ -46,7 +50,9 @@ grep -RInE '0\.2\.122|1\.94' \
   .github/workflows/publish-npm.yml \
   actions/publish-npm \
   actions/setup-rust/action.yml \
-  actions/setup-rust/channel.sh \
+  actions/setup-rust/plan.sh \
+  actions/setup-rust/jail.sh \
+  actions/setup-rust/install.sh \
   actions/setup-wasm/action.yml \
   actions/setup-wasm/lockver.sh \
   actions/setup-wasm/check-pkg.sh \
@@ -59,13 +65,13 @@ grep -RInE '0\.2\.122|1\.94' \
 
 Not a consumer API. Required check-run name for this repository is `Self / CI`.
 
-| File                  | `name:`             | Job ids                                                                                      | Purpose                                                                          |
-| --------------------- | ------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `tests`, `docs`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                        |
-| `self-release.yml`    | `Self / Release`    | `release`                                                                                    | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
-| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                                      | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
-| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                                      | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
-| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                                      | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
+| File                  | `name:`             | Job ids                                                                                                                                 | Purpose                                                                          |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `tests`, `docs`, `e2e-rust`, `e2e-rust-minimal`, `e2e-bun`, `scorecard`, `ci` | Lint the tree. Aggregator job `ci` has `name: Self / CI`.                        |
+| `self-release.yml`    | `Self / Release`    | `release`                                                                                                                               | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                  |
+| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                                                                                 | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                         |
+| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                                                                                 | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`. |
+| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                                                                                 | Post-squash operator: force-move annotated `v<major>` to `origin/main`.          |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.
 

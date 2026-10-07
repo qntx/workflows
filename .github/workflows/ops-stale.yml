@@ -39,7 +39,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: qntx-workflows-ops-stale-${{ github.repository }}
+  group: qntx-workflows-ops-stale-${{ github.repository }}-${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:

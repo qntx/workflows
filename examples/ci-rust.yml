@@ -15,6 +15,11 @@ jobs:
     uses: qntx/workflows/.github/workflows/ci-rust.yml@v2
     permissions:
       contents: read
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     with:
-      rust-version: stable
+      # rust-version: stable   # default '' honours <working-directory>/rust-toolchain{,.toml}, else stable
       # deny: true   # requires deny.toml next to Cargo.toml
+      # doc: true    # cargo doc --workspace --no-deps with RUSTDOCFLAGS=-D warnings
+      # package-check: true   # cargo publish --workspace --dry-run --locked

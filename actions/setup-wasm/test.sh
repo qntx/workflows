@@ -582,56 +582,7 @@ mv "$no_export/package.json.tmp" "$no_export/package.json"
 expect_fail_msg 'dist export deleted' 'exports["./wasm"] is missing' env PACKAGE_DIR="$no_export" bash "$dir/check-dist.sh"
 expect_fail_msg 'dist dir missing' 'package directory' env PACKAGE_DIR="$root/no-such-pkg" bash "$dir/check-dist.sh"
 
-# Keep the rustc match identical to action.yml: "$WANT" | "$WANT".*
-channel_match() {
-  local WANT="$1" got="$2"
-  case "$got" in
-    "$WANT" | "$WANT".*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-expect_ok 'rustc exact' channel_match '1.94' '1.94'
-expect_ok 'rustc patch' channel_match '1.94' '1.94.0'
-if channel_match '1.94' '1.940'; then
-  echo 'FAIL rustc 1.940 matched'
-  fail=1
-else
-  echo 'ok rustc 1.940'
-fi
-if channel_match '1.94' '1.95'; then
-  echo 'FAIL rustc 1.95 matched'
-  fail=1
-else
-  echo 'ok rustc 1.95'
-fi
-expect_ok 'rustc stable' channel_match stable stable
-if channel_match stable 'stable-gnu'; then
-  echo 'FAIL stable-gnu matched'
-  fail=1
-else
-  echo 'ok stable-gnu'
-fi
-if channel_match '1.8' '1.80'; then
-  echo 'FAIL 1.8 matched 1.80'
-  fail=1
-else
-  echo 'ok 1.8 does not match 1.80'
-fi
-expect_ok 'rustc 1.8.0' channel_match '1.8' '1.8.0'
-if channel_match '' '1.94.0'; then
-  echo 'FAIL empty channel matched'
-  fail=1
-else
-  echo 'ok empty channel'
-fi
-
 action="$dir/action.yml"
-if grep -F '"$WANT" | "$WANT".*' "$action" >/dev/null; then
-  echo 'ok action rustc match'
-else
-  echo 'FAIL action rustc match'
-  fail=1
-fi
 
 re='^[0-9]+\.[0-9]+\.[0-9]+$'
 sem_ok() {
@@ -672,10 +623,9 @@ if [ "$(grep -c 'jail.sh' "$action")" -eq 3 ] &&
   [ "$(grep -c 'check-pkg.sh' "$action")" -eq 1 ] &&
   [ "$(grep -c 'check-cdylib.sh' "$action")" -eq 1 ] &&
   [ "$(grep -c 'lockver.sh' "$action")" -eq 1 ] &&
-  [ "$(grep -c "if: inputs.toolchain == 'true'" "$action")" -eq 8 ] &&
+  [ "$(grep -c "if: inputs.toolchain == 'true'" "$action")" -eq 7 ] &&
   [ "$(grep -c "if: inputs.dist-check == 'true'" "$action")" -eq 1 ] &&
-  grep -F 'toolchain-file: true' "$action" >/dev/null &&
-  grep -F "rust-version: ''" "$action" >/dev/null &&
+  grep -F 'working-directory: ${{ inputs.cargo-directory }}' "$action" >/dev/null &&
   grep -F 'cargo install wasm-bindgen-cli --version "$VER" --locked --root "$install_root" --force' "$action" >/dev/null &&
   grep -F 'wasm-bindgen ${VER} cache hit' "$action" >/dev/null &&
   grep -F 'echo "${install_root}/bin" >>"$GITHUB_PATH"' "$action" >/dev/null &&

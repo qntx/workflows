@@ -33,7 +33,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: qntx-workflows-deploy-mkdocs-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-deploy-mkdocs-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

@@ -83,7 +83,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: qntx-workflows-publish-npm-${{ github.repository }}-${{ github.ref }}-${{ inputs.working-directory }}
+  group: qntx-workflows-publish-npm-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}
   cancel-in-progress: false
 
 jobs:

@@ -24,10 +24,10 @@ on:
         type: number
         default: 30
       rust-version:
-        description: 'Rust toolchain channel or version (stable, beta, nightly, or a pinned version).'
+        description: 'Rust toolchain channel or version. Empty honours the working-directory rust-toolchain file, else stable.'
         required: false
         type: string
-        default: 'stable'
+        default: ''
       features:
         description: 'Cargo feature flags: --all-features, --no-default-features, or --features <list>.'
         required: false
@@ -48,13 +48,19 @@ on:
         required: false
         type: string
         default: '--all-features'
+      doc:
+        description: 'Run RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps after Test.'
+        required: false
+        type: boolean
+        default: false
+      package-check:
+        description: 'Run cargo publish --workspace --dry-run --locked after Test.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-
-concurrency:
-  group: qntx-workflows-ci-rust-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   ci:
@@ -83,6 +89,7 @@ jobs:
       - uses: $/actions/setup-rust
         with:
           rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}
           components: rustfmt, clippy
 
       - name: Record toolchain
@@ -157,3 +164,17 @@ jobs:
           # word-split is intentional
           # shellcheck disable=SC2086
           cargo test --workspace --verbose $FEATURES
+
+      - name: Doc
+        if: ${{ inputs.doc }}
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set -euo pipefail
+          # word-split is intentional
+          # shellcheck disable=SC2086
+          cargo doc --workspace --no-deps $FEATURES
+
+      - name: Package check
+        if: ${{ inputs.package-check }}
+        run: cargo publish --workspace --dry-run --locked

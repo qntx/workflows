@@ -1,0 +1,11 @@
+[package]
+name = "fixture-b"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "qntx/workflows e2e fixture crate B"
+publish = true
+
+[dependencies]
+fixture-a = { path = "../fixture-a", version = "0.1.0" }

@@ -44,7 +44,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.event.pull_request.number || 'sweep' }}
+  group: qntx-workflows-ops-dependabot-${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || 'sweep' }}
   cancel-in-progress: true
 
 jobs:

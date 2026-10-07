@@ -108,31 +108,13 @@ runs:
         packages: ${{ inputs.apt-packages }}
 
     - name: Install Rust
-      id: rust
       if: inputs.toolchain == 'true'
       uses: $/actions/setup-rust
       with:
-        toolchain-file: true
-        rust-version: ''
+        working-directory: ${{ inputs.cargo-directory }}
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
         cache-key: ${{ inputs.cache-key }}
-
-    - name: Check rustc channel
-      if: inputs.toolchain == 'true'
-      shell: bash
-      env:
-        WANT: ${{ steps.rust.outputs.channel }}
-      run: |
-        set -euo pipefail
-        got="$(rustc --version | awk '{print $2}')"
-        case "$got" in
-          "$WANT" | "$WANT".*) ;;
-          *)
-            echo "::error::setup-wasm: rustc ${got} does not match channel ${WANT}"
-            exit 1
-            ;;
-        esac
 
     - name: Check cdylib
       if: inputs.toolchain == 'true'
