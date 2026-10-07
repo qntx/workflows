@@ -26,9 +26,26 @@ if ! jq -e . "$pkg" >/dev/null 2>&1; then
   die 'package.json is not valid JSON'
 fi
 
-if [ "$(jq -r '.files == ["dist"]' "$pkg")" != true ]; then
-  die 'files must be ["dist"]'
+if [ "$(jq -r '.files | type' "$pkg")" != array ]; then
+  die 'files must be an array'
 fi
+if [ "$(jq -r 'any(.files[]; . == "dist")' "$pkg")" != true ]; then
+  die 'files must contain "dist"'
+fi
+while IFS= read -r entry; do
+  case "$entry" in
+    dist) ;;
+    dist/*)
+      case "$entry" in
+        *..* | *[\*\?\[]*) die "files entry \"${entry}\" is not allowed" ;;
+      esac
+      ;;
+    *)
+      printf '%s\n' "$entry" | grep -qiE '^(LICEN[CS]E|COPYING|NOTICE|README|CHANGELOG)([-.][A-Za-z0-9.-]+)?$' ||
+        die "files entry \"${entry}\" is not allowed"
+      ;;
+  esac
+done < <(jq -r '.files[]' "$pkg")
 
 if [ "$(jq -r '.sideEffects | type' "$pkg")" != array ]; then
   die 'sideEffects must be an array containing **/*.wasm'
