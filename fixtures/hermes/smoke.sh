@@ -7,7 +7,10 @@ if [ -z "${HERMES:-}" ] || [ ! -x "$HERMES" ]; then
 fi
 
 "$HERMES" -version
-out="$("$HERMES" -e 'print(6*7)')"
+dir="$(mktemp -d)"
+trap 'rm -rf "$dir"' EXIT
+printf '%s\n' 'print(6 * 7);' >"$dir/smoke.js"
+out="$("$HERMES" "$dir/smoke.js")"
 if [ "$out" != 42 ]; then
   echo "unexpected hermes output: ${out}" >&2
   exit 1
