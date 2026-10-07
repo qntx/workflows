@@ -34,7 +34,7 @@ on:
         default: 'do-not-merge,work-in-progress'
     secrets:
       TOKEN:
-        description: 'Token for gh. Omit to use github.token. Use a PAT only if GITHUB_TOKEN cannot merge.'
+        description: 'Token for gh. Omit to use github.token. Required for PRs touching .github/workflows/ (GitHub App installation token or fine-grained PAT with Contents, Pull requests and Workflows write).'
         required: false
 
 permissions:
@@ -61,6 +61,7 @@ jobs:
       - uses: $/actions/ops-dependabot-enable
         with:
           github-token: ${{ secrets.TOKEN || github.token }}
+          custom-token: ${{ secrets.TOKEN != '' }}
           merge-method: ${{ inputs.merge-method }}
           allow-patch: ${{ inputs.allow-patch }}
           allow-minor: ${{ inputs.allow-minor }}

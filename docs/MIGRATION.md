@@ -1,6 +1,6 @@
 # Migration
 
-No shims. Old filenames are deleted. Change every `uses:` in the same window. Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` is a historical immutable tag, not the consumer pin.
+No shims. Old filenames are deleted. Change every `uses:` in the same window. Pin every public callee at `@v2`. `v2` is the annotated moving major tag; it moves only to published `v2.x.y` release commits. For an immutable pin use `@v2.x.y`. `v2.0.0` is a historical immutable tag, not the consumer pin.
 
 ## File mapping
 

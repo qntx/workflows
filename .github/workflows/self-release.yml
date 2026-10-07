@@ -1,5 +1,9 @@
 name: Self / Release
 
+# Immutable release model: a pushed annotated vX.Y.Z tag on a main commit is
+# the release. validate proves the tag, release publishes it, retag moves the
+# v<major> alias to the released commit (never to origin/main).
+
 on:
   push:
     tags: ['v*.*.*']
@@ -7,9 +11,100 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: qntx-workflows-self-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (got ${TAG})"
+            exit 1
+          fi
+
+          git fetch origin --tags --force
+          if [ "$(git cat-file -t "refs/tags/${TAG}" 2>/dev/null || true)" != tag ]; then
+            echo "::error::${TAG} must be an annotated tag (git tag -a)"
+            exit 1
+          fi
+
+          git fetch origin main
+          if ! git rev-parse --verify origin/main >/dev/null; then
+            echo '::error::origin/main is missing after fetch'
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "${TAG}^{commit}" origin/main; then
+            echo "::error::${TAG}^{commit} is not reachable from origin/main"
+            exit 1
+          fi
+
   release:
+    needs: validate
     if: github.ref_type == 'tag' && contains(github.ref_name, '.')
     permissions:
       contents: write
     uses: $/.github/workflows/release.yml
+
+  retag:
+    needs:
+      - validate
+      - release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: retag
+    permissions:
+      contents: write
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Move major tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          major="${TAG%%.*}"
+
+          # A patch release on an older line must not move the alias backwards.
+          latest="$(git tag -l "${major}.*.*" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [ "$latest" != "$TAG" ]; then
+            echo "::notice::${TAG} is not the newest ${major} release (${latest}); ${major} stays put"
+            exit 0
+          fi
+
+          rel_sha="$(git rev-parse "${TAG}^{commit}")"
+          git tag -f -a "$major" -m "track ${TAG}" "$rel_sha"
+          git push -f origin "$major"
+
+          peeled="$(git rev-parse "${major}^{commit}")"
+          if [ "$peeled" != "$rel_sha" ]; then
+            echo "::error::${major}^{commit} ${peeled} != ${TAG}^{commit} ${rel_sha}"
+            exit 1
+          fi
+          {
+            echo "${TAG}^{commit}=${rel_sha}"
+            echo "${major}^{commit}=${peeled}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

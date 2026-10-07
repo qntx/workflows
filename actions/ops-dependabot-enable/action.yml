@@ -20,12 +20,17 @@ inputs:
     description: 'Comma-separated labels that skip auto-merge.'
     required: false
     default: ''
+  custom-token:
+    description: 'true when github-token is a caller-supplied token (not github.token). Workflow-file merges need the workflows permission.'
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
     - shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        CUSTOM_TOKEN: ${{ inputs.custom-token }}
         MERGE_METHOD: ${{ inputs.merge-method }}
         ALLOW_PATCH: ${{ inputs.allow-patch }}
         ALLOW_MINOR: ${{ inputs.allow-minor }}
