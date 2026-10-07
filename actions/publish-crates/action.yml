@@ -9,6 +9,10 @@ inputs:
     description: 'Directory containing the cargo manifest.'
     required: false
     default: '.'
+  dry-run:
+    description: 'Pass --dry-run to cargo publish. A package list publishes in one topological invocation; CARGO_REGISTRY_TOKEN is not required.'
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -16,5 +20,6 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         PACKAGES: ${{ inputs.packages }}
+        DRY_RUN: ${{ inputs.dry-run }}
         CARGO_REGISTRY_TOKEN: ${{ env.CARGO_REGISTRY_TOKEN }}
       run: bash "$GITHUB_ACTION_PATH/publish.sh"

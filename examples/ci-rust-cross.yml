@@ -1,0 +1,20 @@
+# Caller owns on:. Pin at @v2.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cross:
+    uses: qntx/workflows/.github/workflows/ci-rust-cross.yml@v2
+    permissions:
+      contents: read
+    with:
+      targets: wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
+      packages: my-crate
+      # forbid-deps: tokio   # crate names banned from cargo tree -e normal

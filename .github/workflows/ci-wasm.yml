@@ -53,6 +53,21 @@ on:
         required: false
         type: boolean
         default: false
+      rust-checks:
+        description: 'Run cargo fmt, clippy, and test on the cargo workspace. Disable when a sibling ci-rust job covers them.'
+        required: false
+        type: boolean
+        default: true
+      scripts:
+        description: 'Whitespace-separated package script names run in order after test:wasm/bench:wasm.'
+        required: false
+        type: string
+        default: ''
+      dist-export:
+        description: 'Package exports key for the wasm dist check.'
+        required: false
+        type: string
+        default: './wasm'
       targets:
         description: 'Full rustup --target list passed to the pinned dtolnay action. Not merged with rust-toolchain.toml.'
         required: false
@@ -89,17 +104,21 @@ jobs:
           install-directory: ${{ inputs.install-directory }}
           package-manager: ${{ inputs.package-manager }}
           targets: ${{ inputs.targets }}
+          dist-export: ${{ inputs.dist-export }}
           cache-key: wasm32
 
       - name: Format
+        if: ${{ inputs.rust-checks }}
         working-directory: ${{ inputs.cargo-directory }}
         run: cargo fmt --all --check
 
       - name: Clippy
+        if: ${{ inputs.rust-checks }}
         working-directory: ${{ inputs.cargo-directory }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
+        if: ${{ inputs.rust-checks }}
         working-directory: ${{ inputs.cargo-directory }}
         run: cargo test --workspace
 
@@ -134,16 +153,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
-        run: |
-          set -euo pipefail
-          case "$PM" in
-            bun) bun run build:wasm ;;
-            npm) npm run build:wasm ;;
-            *)
-              echo "::error::Unsupported package manager: $PM"
-              exit 1
-              ;;
-          esac
+        run: '"$PM" run build:wasm'
 
       - uses: $/actions/setup-wasm
         with:
@@ -151,34 +161,35 @@ jobs:
           dist-check: true
           package-directory: ${{ inputs.working-directory }}
           package-manager: ${{ inputs.package-manager }}
+          dist-export: ${{ inputs.dist-export }}
 
       - name: Test wasm
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
-        run: |
-          set -euo pipefail
-          case "$PM" in
-            bun) bun run test:wasm ;;
-            npm) npm run test:wasm ;;
-            *)
-              echo "::error::Unsupported package manager: $PM"
-              exit 1
-              ;;
-          esac
+        run: '"$PM" run test:wasm'
 
       - name: Bench wasm
         if: ${{ inputs.bench }}
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
+        run: '"$PM" run bench:wasm'
+
+      - name: Extra scripts
+        if: ${{ inputs.scripts != '' }}
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          PM: ${{ inputs.package-manager }}
+          SCRIPTS: ${{ inputs.scripts }}
         run: |
           set -euo pipefail
-          case "$PM" in
-            bun) bun run bench:wasm ;;
-            npm) npm run bench:wasm ;;
-            *)
-              echo "::error::Unsupported package manager: $PM"
+          # word-split is intentional: whitespace-separated script names
+          # shellcheck disable=SC2086
+          for s in $SCRIPTS; do
+            if ! [[ "$s" =~ ^[A-Za-z0-9:_.-]+$ ]]; then
+              echo "::error::scripts entry charset: ${s}"
               exit 1
-              ;;
-          esac
+            fi
+            "$PM" run "$s"
+          done

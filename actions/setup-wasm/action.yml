@@ -41,6 +41,10 @@ inputs:
     description: 'Relative directory jailed for the caller. This composite does not install packages there.'
     required: false
     default: '.'
+  dist-export:
+    description: 'Package exports key checked by the package and dist contracts.'
+    required: false
+    default: './wasm'
 runs:
   using: composite
   steps:
@@ -138,26 +142,33 @@ runs:
         set -euo pipefail
         cargo_dir="$CARGO_DIR"
         VER="$(bash "$GITHUB_ACTION_PATH/lockver.sh" "$cargo_dir/Cargo.lock" wasm-bindgen)"
-        case "$VER" in
-          *$'\n'*)
+        bindgen_ver=''
+        if [ "$VER" = absent ]; then
+          bindgen_note='wasm-bindgen absent from Cargo.lock; cli skipped'
+          echo "$bindgen_note"
+        else
+          case "$VER" in
+            *$'\n'*)
+              echo '::error::setup-wasm: wasm-bindgen version charset'
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo '::error::setup-wasm: wasm-bindgen version charset'
             exit 1
-            ;;
-        esac
-        if ! printf '%s' "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-          echo '::error::setup-wasm: wasm-bindgen version charset'
-          exit 1
+          fi
+          install_root="${cargo_dir}/target/wasm-bindgen-cli"
+          bin="${install_root}/bin/wasm-bindgen"
+          if [ -x "$bin" ] && [ "$("$bin" -V | awk '{print $NF}')" = "$VER" ]; then
+            echo "wasm-bindgen ${VER} cache hit"
+            bindgen_note="wasm-bindgen ${VER} cache hit"
+          else
+            cargo install wasm-bindgen-cli --version "$VER" --locked --root "$install_root" --force
+            bindgen_note="wasm-bindgen ${VER} installed"
+          fi
+          echo "${install_root}/bin" >>"$GITHUB_PATH"
+          bindgen_ver="$("$bin" -V)"
         fi
-        install_root="${cargo_dir}/target/wasm-bindgen-cli"
-        bin="${install_root}/bin/wasm-bindgen"
-        if [ -x "$bin" ] && [ "$("$bin" -V | awk '{print $NF}')" = "$VER" ]; then
-          echo "wasm-bindgen ${VER} cache hit"
-          bindgen_note="wasm-bindgen ${VER} cache hit"
-        else
-          cargo install wasm-bindgen-cli --version "$VER" --locked --root "$install_root" --force
-          bindgen_note="wasm-bindgen ${VER} installed"
-        fi
-        echo "${install_root}/bin" >>"$GITHUB_PATH"
         clang_ver="$(clang --version)"
         {
           echo '### wasm toolchain'
@@ -165,7 +176,9 @@ runs:
           rustc --version
           cargo --version
           printf '%s\n' "${clang_ver%%$'\n'*}"
-          "$bin" -V
+          if [ -n "$bindgen_ver" ]; then
+            printf '%s\n' "$bindgen_ver"
+          fi
           printf '%s\n' "$bindgen_note"
           printf '%s\n' "package-manager: ${PM}"
           printf '%s\n' "cargo-directory: ${cargo_dir}"
@@ -177,6 +190,7 @@ runs:
       env:
         PM: ${{ inputs.package-manager }}
         PACKAGE_DIR: ${{ steps.package-dir.outputs.path }}
+        DIST_EXPORT: ${{ inputs.dist-export }}
       run: |
         set -euo pipefail
         bash "$GITHUB_ACTION_PATH/check-pkg.sh" "$PACKAGE_DIR/package.json"
@@ -197,4 +211,5 @@ runs:
       shell: bash
       env:
         PACKAGE_DIR: ${{ steps.package-dir.outputs.path }}
+        DIST_EXPORT: ${{ inputs.dist-export }}
       run: bash "$GITHUB_ACTION_PATH/check-dist.sh"

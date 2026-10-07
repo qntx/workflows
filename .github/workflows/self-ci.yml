@@ -185,6 +185,45 @@ jobs:
     with:
       working-directory: fixtures/bun
 
+  e2e-wasm:
+    uses: $/.github/workflows/ci-wasm.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/wasm
+      install-directory: fixtures/wasm
+      cargo-directory: fixtures/wasm
+      rust-checks: false
+      scripts: test:extra
+
+  e2e-cross:
+    uses: $/.github/workflows/ci-rust-cross.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cross
+      targets: wasm32-unknown-unknown aarch64-linux-android x86_64-linux-android aarch64-apple-ios aarch64-apple-ios-sim
+      packages: fixture-cross
+      forbid-deps: itoa
+
+  e2e-publish-crates:
+    uses: $/.github/workflows/publish-crates.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust
+      packages: fixture-a fixture-b
+      dry-run: true
+
+  e2e-hermes:
+    uses: $/.github/workflows/ci-hermes.yml
+    permissions:
+      contents: read
+    with:
+      # Same commit nostr.js pins (RN 0.86 → hermes-v250829098.0.17).
+      hermes-commit: 3477757eb2475555cf8d8df24bfb1deb0613880d
+      working-directory: fixtures/hermes
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -226,6 +265,10 @@ jobs:
         e2e-rust,
         e2e-rust-minimal,
         e2e-bun,
+        e2e-wasm,
+        e2e-cross,
+        e2e-publish-crates,
+        e2e-hermes,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -243,7 +286,11 @@ jobs:
           || needs.docs.result != 'success'
           || needs.e2e-rust.result != 'success'
           || needs.e2e-rust-minimal.result != 'success'
-          || needs.e2e-bun.result != 'success' }}
+          || needs.e2e-bun.result != 'success'
+          || needs.e2e-wasm.result != 'success'
+          || needs.e2e-cross.result != 'success'
+          || needs.e2e-publish-crates.result != 'success'
+          || needs.e2e-hermes.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

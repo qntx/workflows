@@ -1,0 +1,8 @@
+{
+  "name": "fixture-hermes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke:hermes": "bash smoke.sh"
+  }
+}

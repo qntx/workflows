@@ -62,11 +62,18 @@ case "$root_import" in
   *wasm*) die 'exports["."].import must not contain wasm' ;;
 esac
 
-if [ "$(jq -r '.exports["./wasm"].import | type' "$pkg")" != string ]; then
-  die 'exports["./wasm"].import is missing'
+dist_export="${DIST_EXPORT:-./wasm}"
+case "$dist_export" in
+  ./) die 'dist-export is empty' ;;
+  ./*[!A-Za-z0-9._/-]* | ./*/) die 'dist-export charset' ;;
+  ./*) ;;
+  *) die 'dist-export must start with ./' ;;
+esac
+if [ "$(jq -r --arg e "$dist_export" '.exports[$e].import | type' "$pkg")" != string ]; then
+  die "exports[\"${dist_export}\"].import is missing"
 fi
-if [ -z "$(jq -r '.exports["./wasm"].import' "$pkg")" ]; then
-  die 'exports["./wasm"].import is missing'
+if [ -z "$(jq -r --arg e "$dist_export" '.exports[$e].import' "$pkg")" ]; then
+  die "exports[\"${dist_export}\"].import is missing"
 fi
 
 need_script() {
