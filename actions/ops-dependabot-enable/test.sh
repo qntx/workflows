@@ -182,8 +182,19 @@ PATCH='update-type: version-update:semver-patch'
 GREEN='[{"name":"Lint","status":"COMPLETED","conclusion":"SUCCESS","workflowName":"CI"}]'
 
 expect_eval 'eval-green' 'merge' "$(pr_base "$GREEN")" "$TEXT"
-expect_eval 'eval-pending' 'wait:checks' "$(pr_base '[{"name":"Lint","status":"IN_PROGRESS","conclusion":null,"workflowName":"CI"}]')" "$TEXT"
-expect_eval 'eval-red' 'wait:checks' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"FAILURE","workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-pending' 'wait:checks-pending' "$(pr_base '[{"name":"Lint","status":"IN_PROGRESS","conclusion":null,"workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-queued' 'wait:checks-pending' "$(pr_base '[{"name":"Lint","status":"QUEUED","conclusion":null,"workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-red' 'blocked:checks-failed' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"FAILURE","workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-cancelled' 'blocked:checks-failed' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"CANCELLED","workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-timed-out' 'blocked:checks-failed' "$(pr_base '[{"name":"Lint","status":"COMPLETED","conclusion":"TIMED_OUT","workflowName":"CI"}]')" "$TEXT"
+expect_eval 'eval-status-error' 'blocked:checks-failed' "$(pr_base '[{"__typename":"StatusContext","context":"coverage","state":"ERROR"}]')" "$TEXT"
+expect_eval 'eval-status-pending' 'wait:checks-pending' "$(pr_base '[{"__typename":"StatusContext","context":"coverage","state":"PENDING"}]')" "$TEXT"
+ga_pr="$(printf '%s' "$(pr_base "$GREEN")" | jq '.labels=[{"name":"dependencies"},{"name":"github-actions"}]')"
+digest_text=$'---\nupdated-dependencies:\n- dependency-name: dtolnay/rust-toolchain\n...'
+expect_eval 'eval-digest-update' 'skip:digest-update dtolnay/rust-toolchain' "$ga_pr" "$digest_text"
+js_pr="$(printf '%s' "$(pr_base "$GREEN")" | jq '.labels=[{"name":"dependencies"},{"name":"javascript"}]')"
+expect_eval 'eval-unhandled-type' 'skip:unhandled-update-type ' "$js_pr" "$digest_text"
+
 expect_eval 'eval-major' 'skip:update-type-disabled version-update:semver-major' "$(pr_base '[]')" 'update-type: version-update:semver-major'
 expect_eval 'eval-self-only-young' 'wait:grace' "$(pr_base '[{"name":"merge / merge","status":"COMPLETED","conclusion":"FAILURE","workflowName":"Dependabot"}]')" "$TEXT"
 
@@ -260,15 +271,17 @@ expect_eq 'scope-status' "$(ops_dependabot_forbidden_scope "$err_status")" 'stat
 
 viewed="$(mktemp)"
 merged="$(mktemp)"
-pr12="$(printf '%s' "$(pr_base "$GREEN")" | jq --arg t "$PATCH" '.number=12 | .body=$t | .commits[0].messageBody=$t')"
+summary="$(mktemp)"
+pr12="$(printf '%s' "$(pr_base "$GREEN")" | jq --arg t "$PATCH" '.number=12 | .title="Bump itoa" | .body=$t | .commits[0].messageBody=$t')"
+pr13="$(printf '%s' "$(pr_base "$GREEN")" | jq --arg t "$PATCH" '.number=13 | .title="Bump foo" | .body=$t | .commits[0].messageBody=$t')"
 base_env
 GITHUB_REPOSITORY='owner/repo'
-unset GITHUB_STEP_SUMMARY
+GITHUB_STEP_SUMMARY="$summary"
 gh() {
   local n
   case "${1:-} ${2:-}" in
     'pr list')
-      printf '16\n12\n'
+      printf '16\n12\n13\n'
       return 0
       ;;
     'pr view')
@@ -282,11 +295,19 @@ gh() {
         printf '%s\n' "$pr12"
         return 0
       fi
+      if [ "$n" = 13 ]; then
+        printf '%s\n' "$pr13"
+        return 0
+      fi
       echo "ops-dependabot-test: unexpected pr view ${n}" >&2
       return 1
       ;;
     'pr merge')
       printf '%s\n' "$*" >>"$merged"
+      if [ "${MERGE_FAIL_FOR:-}" = "${!#}" ]; then
+        echo 'refusing to allow a GitHub App to create or update workflow' >&2
+        return 1
+      fi
       return 0
       ;;
     *)
@@ -296,19 +317,79 @@ gh() {
   esac
 }
 
+MERGE_FAIL_FOR=13
 set +e
 ops_dependabot_sweep
 sweep_rc=$?
 set -e
 expect_eq 'sweep-403-rc' "$sweep_rc" '1'
-expect_eq 'sweep-viewed' "$(xargs echo <"$viewed")" '16 12'
+expect_eq 'sweep-viewed' "$(xargs echo <"$viewed")" '16 12 13'
 if awk '{print $NF}' "$merged" | grep -qx 12; then
   echo 'ok sweep-merged-12'
 else
   echo 'FAIL sweep-merged-12: expected merge of #12'
   fail=1
 fi
-rm -f "$viewed" "$merged"
+if grep -Fq '| #13 | Bump foo | fail:merge refusing to allow a GitHub App to create or update workflow |' "$summary"; then
+  echo 'ok sweep-summary-fail-row'
+else
+  echo 'FAIL sweep-summary-fail-row'
+  fail=1
+fi
+if grep -Fq '| #12 | Bump itoa | merge |' "$summary" && grep -Fq '| merge | 1 |' "$summary" && grep -Fq '| fail | 2 |' "$summary"; then
+  echo 'ok sweep-summary-table'
+else
+  echo 'FAIL sweep-summary-table'
+  fail=1
+fi
+unset GITHUB_STEP_SUMMARY
+rm -f "$viewed" "$merged" "$summary"
+
+wf_pr="$(printf '%s' "$(pr_base "$GREEN")" | jq --arg t "$PATCH" '.body=$t | .commits[0].messageBody=$t | .files=[{"path":".github/workflows/publish.yml"}]')"
+expect_touches() {
+  local label="$1" json="$2" want="$3" rc=0
+  set +e
+  ops_dependabot_touches_workflows "$json"
+  rc=$?
+  set -e
+  [ "$rc" -eq "$want" ] && echo "ok ${label}" || { echo "FAIL ${label}: rc=${rc} want=${want}"; fail=1; }
+}
+expect_touches 'touches-workflows' "$wf_pr" 0
+expect_touches 'touches-src-only' "$(pr_base "$GREEN")" 1
+
+base_env
+NOW_EPOCH=1700000400
+GITHUB_REPOSITORY='owner/repo'
+unset CUSTOM_TOKEN
+sweep_gh() {
+  case "${1:-} ${2:-}" in
+    'pr merge') echo 'merged'; return 0 ;;
+    *) echo "ops-dependabot-test: unexpected gh $*" >&2; return 1 ;;
+  esac
+}
+gh() { sweep_gh "$@"; }
+
+# github.token can never merge a PR that edits .github/workflows/.
+set +e
+ops_dependabot_sweep_one "$wf_pr" >/dev/null 2>&1
+set -e
+expect_eq 'sweep-one-needs-token' "$OPS_DEPENDABOT_OUTCOME" 'skip:needs-workflows-token'
+
+# A caller-supplied TOKEN bypasses the workflow-file guard.
+CUSTOM_TOKEN=true
+set +e
+ops_dependabot_sweep_one "$wf_pr" >/dev/null 2>&1
+set -e
+expect_eq 'sweep-one-custom-token' "$OPS_DEPENDABOT_OUTCOME" 'merge'
+
+# A merge failure is recorded and does not abort the sweep.
+gh() { echo 'refusing to allow a GitHub App to create or update workflow' >&2; return 1; }
+set +e
+ops_dependabot_sweep_one "$wf_pr" >/dev/null 2>&1
+one_rc=$?
+set -e
+expect_eq 'sweep-one-merge-fail-rc' "$one_rc" '0'
+expect_eq 'sweep-one-merge-fail' "$OPS_DEPENDABOT_OUTCOME" 'fail:merge refusing to allow a GitHub App to create or update workflow'
 
 merge_now_gh() {
   case "${MERGE_NOW_CASE:-}" in

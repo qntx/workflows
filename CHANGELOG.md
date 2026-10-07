@@ -22,24 +22,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ops-dependabot` permission contract: `checks: read` + `actions: read` on caller and callee. Callers schedule daily `0 4 * * *` (04:00 UTC). `statusCheckRollup` GraphQL 403 remains fail and continues later PRs.
 - README: `ops-dependabot` cancels overlapping sweeps.
 - PR template: document breaks in `docs/MIGRATION.md` and `CHANGELOG.md`; no shims / no dual contracts.
-- `self-retag` force-moves annotated `vN` to `origin/main` after squash. Input `target` is deleted.
 - `ops-sync` jails canonical `.git` / `.github` path segments after `realpath`, not only `$root/.git` / `$root/.github`.
 - `scorecard` checkout is `$/actions/hardened-checkout`.
 - `ci-docs.yml` no longer identity-checkouts this repository or jails `docs-path` in Python. `$/actions/validate-docs-tree` is self-contained (`package.json` + lockfile; `bun install` at `github.action_path`).
 - `stale.yml` and `repo-stale.yml` stay as `workflow_call` forwards to `ops-stale.yml` so unmigrated `@main` callers do not 404. Not a public API. New callers use `ops-stale.yml@v2`.
-- Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` remains a historical immutable tag, not the consumer pin.
+- Pin every public callee at `@v2` (moving) or `@v2.x.y` (immutable). `v2` moves only to published `v2.x.y` release commits; `v2.0.0` remains a historical immutable tag. Releases are cut by pushing an annotated `vX.Y.Z` tag on a `main` commit.
+- `Self / Release` on `vX.Y.Z` push validates the tag (annotated, reachable from `origin/main`), calls `release.yml`, then force-moves annotated `v<major>` to the release commit and verifies the peeled SHA.
+- `Self / Retag` is rollback-only: required `tag` input must be an existing annotated `vX.Y.Z` on origin; `v<major>` moves to that tag's commit. The move-to-`origin/main` behaviour is removed.
+- `ops-dependabot` sweep: a failed merge is `fail:merge <reason>` and later PRs still run; the job exits non-zero if any PR failed (reported from production 2026-10-07).
+- `ops-dependabot` splits `wait:checks` into `wait:checks-pending` and `blocked:checks-failed`, and writes a per-PR decision table to the step summary.
+- `ops-dependabot` skips PRs touching `.github/workflows/` as `skip:needs-workflows-token` unless the caller passes `TOKEN` (`github.token` can never hold `workflows` write).
+- `ops-dependabot` reports SHA-only `github-actions` bumps as `skip:digest-update <name>` instead of `skip:unhandled-update-type`; they are never auto-merged.
+- `ci-*.yml` callees drop workflow-level `concurrency`; callers own `concurrency` (#77). deploy/publish/release/ops callee groups gain `${{ github.workflow }}`.
+- `ci-rust.yml` inputs `doc` and `package-check` (#77). `rust-version` default `''` honours `rust-toolchain.toml`/`rust-toolchain` in `working-directory`, else `stable` (#77, #78 fixture coverage).
+- `setup-rust` resolves the toolchain in `working-directory` (walks up to `GITHUB_WORKSPACE`), installs `rustup toolchain install` (rustup >= 1.28) or dtolnay, and exports `RUSTUP_TOOLCHAIN` for explicit `rust-version` (#77). `channel.sh` is deleted; `toolchain-file` is a deprecated no-op; outputs are `toolchain`/`rustc` (`channel` aliases `toolchain`); rust-cache gets `workspaces: <working-directory>`.
+- `ci-wasm.yml` inputs `rust-checks` (skip fmt/clippy/test), `scripts` (extra package scripts after test/bench), `dist-export` (#78). Package-manager blocks collapse to `"$PM" run`.
+- `setup-wasm` skips `wasm-bindgen-cli` when `Cargo.lock` has no `wasm-bindgen` (`lockver.sh` reports `absent`), and checks `dist-export` instead of a hard-coded `./wasm` (#78).
+- `publish-crates` drops inline fmt/clippy/build/test (`cargo publish` verifies the build; CI gates the tag) and adds `dry-run` (#78). Dry-run is one `cargo publish -p <each> --locked --dry-run` call so unpublished path deps resolve, and does not need `CARGO_REGISTRY_TOKEN`.
+- `release.yml` merges the two download steps (`pattern: ''` is falsy in `actions/download-artifact`) (#78).
 
 ### Fixed
+
+- `ops-dependabot`: `gh pr merge` conflicts and exhausted `Base branch was modified` retries wait for the next sweep instead of failing the job.
 
 - `ops-dependabot`: `gh pr merge` conflicts and exhausted `Base branch was modified` retries wait for the next sweep instead of failing the job.
 - `dependabot.yml`: use the existing `github_actions` label. Drop `github-actions` and `javascript` (those labels are not in this repository).
 - `publish-pypi` checks the dist with `uvx twine` instead of `uv pip install --system twine`, which fails on PEP 668 externally-managed CPython from `setup-uv`.
 - `publish-pypi` uploads with `uv publish` instead of `pypa/gh-action-pypi-publish`. Nested Docker actions resolve to `ghcr.io/qntx/workflows:<sha>` and 403.
 - `publish-pypi` does not export empty `UV_PUBLISH_URL`; uv treats `''` as an invalid `--publish-url`.
+- `setup-wasm` `check-pkg.sh` accepts `files` containing `dist`, `dist/` paths, and top-level `LICEN[CS]E`/`COPYING`/`NOTICE`/`README`/`CHANGELOG` files; anything else is rejected with the offending entry named (#76).
 
 ### Added
 
-- `setup-rust` input `toolchain-file` (default false) parses `channel` from `rust-toolchain.toml` or a one-line `rust-toolchain` and passes it to dtolnay. Private composite `actions/setup-wasm` installs that toolchain, `wasm-bindgen-cli` from `Cargo.lock`, and the wasm package contract.
+- `ci-rust-cross.yml` (`CI / Rust cross`, jobs `plan` + `build`): required `targets`/`packages`, `features`, `forbid-deps`, per-target toolchain (wasm32 via `clang`/`lld`, android via `cargo-ndk`, iOS plain `cargo build`) (#78).
+- `ci-hermes.yml` (`CI / Hermes`): cached Hermes build pinned by `hermes-commit`, then `bun run <script>` with `HERMES` (#78).
+- `ops-dependabot-enable` input `custom-token` flags that `github-token` is caller-supplied.
+- `fixtures/{rust,bun,wasm,cross,hermes}` workspaces and `self-ci.yml` `e2e-*` jobs exercise the public workflows for real (#77, #78).- `setup-rust` input `toolchain-file` (default false) parses `channel` from `rust-toolchain.toml` or a one-line `rust-toolchain` and passes it to dtolnay. Private composite `actions/setup-wasm` installs that toolchain, `wasm-bindgen-cli` from `Cargo.lock`, and the wasm package contract.
 - `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` after checkout and setup-bun. Path jail is TypeScript `resolveDocsRoot`. Local/fan-in CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Root lockfile is repo-dev only.
 - `ci-wasm.yml` (`CI / WASM`, job id `ci`): wasm32 toolchain, host fmt/clippy/test, `build:wasm`, `test:wasm`, optional `bench:wasm`. Debian runner. `timeout-minutes` default 30.
 - `publish-npm` inputs `wasm` (default false) and `cargo-directory`. Wasm runs `build:wasm` once and `npm publish --ignore-scripts`. Callers set `timeout-minutes` to 30. Default timeout stays 15. Token provenance stays false; OIDC provenance stays true.

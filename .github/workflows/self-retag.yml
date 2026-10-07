@@ -1,10 +1,14 @@
 name: Self / Retag
 
+# Rollback only: point the v<major> alias back at a published vX.Y.Z release.
+# Routine retagging after a release lives in self-release.yml; this workflow
+# never moves the alias to origin/main.
+
 on:
   workflow_dispatch:
     inputs:
-      major:
-        description: 'Major digit to move (e.g. 2). Writes annotated tag v<major> at origin/main.'
+      tag:
+        description: 'Existing release tag to point the major alias at (vX.Y.Z).'
         required: true
         type: string
 
@@ -36,29 +40,34 @@ jobs:
       - name: Move major tag
         shell: bash
         env:
-          MAJOR: ${{ inputs.major }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
 
-          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]]; then
-            echo "::error::major must match ^[0-9]+$ (got ${MAJOR})"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag must match ^v[0-9]+\.[0-9]+\.[0-9]+$ (got ${TAG})"
             exit 1
           fi
 
           # Dispatch ref is not origin/main. Do not peel HEAD.
           git fetch origin main --tags --force
 
-          if ! git rev-parse --verify origin/main >/dev/null; then
-            echo "::error::origin/main is missing after fetch"
+          if [ "$(git cat-file -t "refs/tags/${TAG}" 2>/dev/null || true)" != tag ]; then
+            echo "::error::${TAG} is not an annotated tag on origin"
             exit 1
           fi
 
-          main_sha="$(git rev-parse origin/main)"
-          git tag -f -a "v${MAJOR}" -m "track origin/main" "$main_sha"
-          git push -f origin "v${MAJOR}"
+          major="${TAG%%.*}"
+          rel_sha="$(git rev-parse "${TAG}^{commit}")"
+          git tag -f -a "$major" -m "track ${TAG}" "$rel_sha"
+          git push -f origin "$major"
 
-          peeled="$(git rev-parse "v${MAJOR}^{commit}")"
+          peeled="$(git rev-parse "${major}^{commit}")"
+          if [ "$peeled" != "$rel_sha" ]; then
+            echo "::error::${major}^{commit} ${peeled} != ${TAG}^{commit} ${rel_sha}"
+            exit 1
+          fi
           {
-            echo "origin/main=${main_sha}"
-            echo "v${MAJOR}^{commit}=${peeled}"
+            echo "${TAG}^{commit}=${rel_sha}"
+            echo "${major}^{commit}=${peeled}"
           } | tee -a "$GITHUB_STEP_SUMMARY"

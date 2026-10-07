@@ -31,6 +31,11 @@ print(int((now - created).total_seconds()))
 ' "$created" "$(ops_dependabot_now)" 2>/dev/null || true
 }
 
+# First `dependency-name: <name>` in a Dependabot footer, else empty.
+ops_dependabot_parse_dependency_name() {
+  printf '%s\n' "$1" | grep -oE 'dependency-name: [^[:space:]]+' | head -n1 | sed 's/dependency-name: //'
+}
+
 # Highest version-update:semver-* or version-update:lockfile-only in text, else empty.
 ops_dependabot_parse_update_type() {
   local text="$1" t best= rank=0 r
@@ -130,20 +135,34 @@ ops_dependabot_has_other_checks() {
   [ "$(printf '%s' "$others" | jq 'length')" -gt 0 ]
 }
 
-# 0 = every non-self check is a completed success/skipped/neutral (or there are none).
-ops_dependabot_rollup_ok() {
+# Prints ok | pending | failed for the non-self rollup.
+# ok: every check succeeded/skipped/neutral (or none). failed: any completed
+# check with a failing/cancelled/timed-out conclusion or a StatusContext
+# FAILURE/ERROR. pending: anything still queued or in progress.
+ops_dependabot_rollup_state() {
   local others
   others="$(ops_dependabot_others_json "$1")"
-  printf '%s' "$others" | jq -e '
-    def ok:
+  printf '%s' "$others" | jq -r '
+    def state_of:
       if (.__typename == "StatusContext") or (has("state") and (has("conclusion") | not)) then
-        .state == "SUCCESS"
+        if .state == "SUCCESS" then "ok"
+        elif .state == "FAILURE" or .state == "ERROR" then "failed"
+        else "pending" end
       else
-        .status == "COMPLETED"
-        and (.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL")
+        if .status != "COMPLETED" then "pending"
+        elif (.conclusion == "SUCCESS" or .conclusion == "SKIPPED" or .conclusion == "NEUTRAL") then "ok"
+        else "failed" end
       end;
-    length == 0 or all(ok)
-  ' >/dev/null
+    [.[] | state_of] |
+    if any(.[]; . == "failed") then "failed"
+    elif any(.[]; . == "pending") then "pending"
+    else "ok" end
+  '
+}
+
+# 0 = every non-self check is a completed success/skipped/neutral (or there are none).
+ops_dependabot_rollup_ok() {
+  [ "$(ops_dependabot_rollup_state "$1")" = ok ]
 }
 
 # $1 PR JSON. $2 optional raw commit/PR text used as update-type source.
@@ -184,6 +203,15 @@ ops_dependabot_evaluate() {
   fi
   UPDATE_TYPE="$(ops_dependabot_parse_update_type "$text")"
 
+  # github-actions digest bumps (SHA -> SHA) carry no version-update tag.
+  # Never auto-merge; report distinctly from unknown update types.
+  if [ -z "$UPDATE_TYPE" ] && printf '%s' ",${PR_LABELS}," | grep -Fq ',github-actions,'; then
+    local dep
+    dep="$(ops_dependabot_parse_dependency_name "$text")"
+    printf 'skip:digest-update %s\n' "${dep:-unknown}"
+    return 0
+  fi
+
   local decision
   decision="$(ops_dependabot_decide)"
   case "$decision" in
@@ -209,10 +237,18 @@ ops_dependabot_evaluate() {
       ;;
   esac
 
-  if ! ops_dependabot_rollup_ok "$pr"; then
-    echo 'wait:checks'
-    return 0
-  fi
+  local rollup
+  rollup="$(ops_dependabot_rollup_state "$pr")"
+  case "$rollup" in
+    failed)
+      echo 'blocked:checks-failed'
+      return 0
+      ;;
+    pending)
+      echo 'wait:checks-pending'
+      return 0
+      ;;
+  esac
 
   if ! ops_dependabot_has_other_checks "$pr"; then
     local created age grace
@@ -268,6 +304,7 @@ ops_dependabot_merge_now() {
       continue
     fi
     printf '%s\n' "$out"
+    OPS_DEPENDABOT_MERGE_ERR="$(printf '%s\n' "$out" | head -n1 | tr -d '|')"
     return 1
   done
 }
@@ -294,6 +331,13 @@ ops_dependabot_pr_messages() {
   printf '%s' "$text"
 }
 
+# $1 PR JSON (must include .files). True when the PR modifies files under
+# .github/workflows/. The token job token can never hold the `workflows`
+# permission, so merging those PRs fails; callers must pass a custom TOKEN.
+ops_dependabot_touches_workflows() {
+  printf '%s' "$1" | jq -e '[.files[]?.path | select(startswith(".github/workflows/"))] | length > 0' >/dev/null
+}
+
 ops_dependabot_sweep_one() {
   local pr="$1" text result
   OPS_DEPENDABOT_OUTCOME=fail
@@ -308,20 +352,25 @@ ops_dependabot_sweep_one() {
   result="$(ops_dependabot_evaluate "$pr" "$text")"
   case "$result" in
     merge)
+      if [ "${CUSTOM_TOKEN:-}" != true ] && ops_dependabot_touches_workflows "$pr"; then
+        echo "::notice::ops-dependabot: #${PR_NUMBER} skip:needs-workflows-token"
+        OPS_DEPENDABOT_OUTCOME='skip:needs-workflows-token'
+        return 0
+      fi
       echo "::notice::ops-dependabot: merging #${PR_NUMBER}"
       if ops_dependabot_merge_now; then
         OPS_DEPENDABOT_OUTCOME=merge
         return 0
       fi
-      OPS_DEPENDABOT_OUTCOME=fail
-      return 1
+      OPS_DEPENDABOT_OUTCOME="fail:merge ${OPS_DEPENDABOT_MERGE_ERR:-unknown}"
+      return 0
       ;;
     skip:*)
       echo "::notice::ops-dependabot: #${PR_NUMBER} ${result}"
-      OPS_DEPENDABOT_OUTCOME=skip
+      OPS_DEPENDABOT_OUTCOME=$result
       return 0
       ;;
-    wait:checks | wait:grace | wait:behind | wait:unknown)
+    wait:* | blocked:*)
       echo "::notice::ops-dependabot: #${PR_NUMBER} ${result}"
       OPS_DEPENDABOT_OUTCOME=$result
       return 0
@@ -348,8 +397,9 @@ ops_dependabot_forbidden_scope() {
 }
 
 ops_dependabot_sweep() {
-  local n json errfile err scope
-  local c_merge=0 c_wait_checks=0 c_wait_grace=0 c_wait_behind=0 c_wait_unknown=0 c_skip=0 c_fail=0
+  local n json errfile err scope title
+  local c_merge=0 c_wait_pending=0 c_blocked=0 c_wait_grace=0 c_wait_behind=0 c_wait_unknown=0 c_skip=0 c_fail=0
+  local -a rows=()
   if [ -z "${GITHUB_REPOSITORY:-}" ]; then
     echo 'ops-dependabot: GITHUB_REPOSITORY is empty' >&2
     return 2
@@ -361,17 +411,20 @@ ops_dependabot_sweep() {
   while IFS= read -r n; do
     [ -z "$n" ] && continue
     if json="$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" \
-        --json number,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits \
+        --json number,title,author,labels,isDraft,mergeStateStatus,mergeable,createdAt,statusCheckRollup,commits,files \
         2>"$errfile")"; then
       OPS_DEPENDABOT_OUTCOME=fail
       ops_dependabot_sweep_one "$json" || true
+      title="$(printf '%s' "$json" | jq -r '.title // ""' | tr -d '|')"
+      rows+=("$(printf '| #%s | %s | %s |' "$n" "$title" "$OPS_DEPENDABOT_OUTCOME")")
       case "${OPS_DEPENDABOT_OUTCOME}" in
         merge) c_merge=$((c_merge + 1)) ;;
-        wait:checks) c_wait_checks=$((c_wait_checks + 1)) ;;
+        wait:checks-pending) c_wait_pending=$((c_wait_pending + 1)) ;;
+        blocked:checks-failed) c_blocked=$((c_blocked + 1)) ;;
         wait:grace) c_wait_grace=$((c_wait_grace + 1)) ;;
         wait:behind) c_wait_behind=$((c_wait_behind + 1)) ;;
         wait:unknown) c_wait_unknown=$((c_wait_unknown + 1)) ;;
-        skip) c_skip=$((c_skip + 1)) ;;
+        skip*) c_skip=$((c_skip + 1)) ;;
         *) c_fail=$((c_fail + 1)) ;;
       esac
     else
@@ -383,6 +436,7 @@ ops_dependabot_sweep() {
       else
         echo "ops-dependabot: #${n} gh pr view failed: ${err}" >&2
       fi
+      rows+=("| #${n} | | fail:view |")
       c_fail=$((c_fail + 1))
       continue
     fi
@@ -397,12 +451,19 @@ ops_dependabot_sweep() {
       echo '| result | count |'
       echo '| --- | --- |'
       echo "| merge | ${c_merge} |"
-      echo "| wait:checks | ${c_wait_checks} |"
+      echo "| wait:checks-pending | ${c_wait_pending} |"
+      echo "| blocked:checks-failed | ${c_blocked} |"
       echo "| wait:grace | ${c_wait_grace} |"
       echo "| wait:behind | ${c_wait_behind} |"
       echo "| wait:unknown | ${c_wait_unknown} |"
       echo "| skip | ${c_skip} |"
       echo "| fail | ${c_fail} |"
+      echo
+      echo '| PR | title | decision |'
+      echo '| --- | --- | --- |'
+      if [ "${#rows[@]}" -gt 0 ]; then
+        printf '%s\n' "${rows[@]}"
+      fi
     } >>"$GITHUB_STEP_SUMMARY"
   fi
 

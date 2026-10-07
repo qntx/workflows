@@ -2,7 +2,7 @@
 
 The caller owns `on:`. Callees only declare `workflow_call` inputs, secrets, and outputs.
 
-Pin every public callee at `@v2`. `v2` is the annotated moving major tag. `Self / Retag` force-moves it to `origin/main`. `v2.0.0` is a historical immutable tag, not the consumer pin.
+Pin every public callee at `@v2`. `v2` is the annotated moving major tag; it moves only to published `v2.x.y` release commits. For an immutable pin use `@v2.x.y`. Releases are cut by pushing an annotated `vX.Y.Z` tag on a `main` commit. `v2.0.0` is a historical immutable tag, not the consumer pin.
 
 ```yaml
 jobs:
@@ -105,7 +105,7 @@ bun validate-docs-tree.ts "$docsDir" --lint
 
 ### ci-wasm
 
-Rust-free CI stays `ci-bun.yml`. Wasm CI is a sibling job. Caller job id `wasm`. Do not set `jobs.wasm.name`. Check-run is `wasm / ci`. Pin `@v2`. `@v2` does not move on merge; `Self / Retag` moves it. Do not `uses:` `actions/setup-wasm`. Bindgen version is not an input.
+Rust-free CI stays `ci-bun.yml`. Wasm CI is a sibling job. Caller job id `wasm`. Do not set `jobs.wasm.name`. Check-run is `wasm / ci`. Pin `@v2`. `@v2` does not move on merge; it moves to the published `v2.x.y` commit when a release is cut. Do not `uses:` `actions/setup-wasm`. Bindgen version is not an input.
 
 `timeout-minutes` may be omitted (default 30). `bun-version` may be omitted (default `1.4`, not `latest`, not `1.4.0`). `package-manager` is `bun` or `npm`. Copy `examples/ci-wasm.yml`.
 
@@ -388,6 +388,10 @@ Rulesets that require reviews mean this workflow never merges those PRs (`skip:B
 
 Leftover caller `pull_request` / `pull_request_target` skips the job. That run must not share the sweep concurrency group; the callee keeps `…-${{ github.event.pull_request.number || 'sweep' }}`.
 
-Defaults: squash; `semver-patch`, `version-update:lockfile-only`, and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`. `TOKEN` is only for when `github.token` cannot merge (branch allowlist that excludes `GITHUB_TOKEN`), not for reviews. If used, `TOKEN` needs `contents` + `pull-requests` write and `checks` + `actions` read.
+Defaults: squash; `semver-patch`, `version-update:lockfile-only`, and `semver-minor` on; `semver-major` off. Omit `TOKEN` to use `github.token`.
+
+`TOKEN` is required to merge PRs that touch `.github/workflows/`: `github.token` can never hold the `workflows` permission, and the sweep reports `skip:needs-workflows-token` for those PRs instead of attempting the merge. Use a GitHub App installation token or fine-grained PAT with `Contents`, `Pull requests`, and `Workflows` write (plus `checks` + `actions` read for the rollup query). `TOKEN` is also for when `github.token` cannot merge at all (branch allowlist that excludes `GITHUB_TOKEN`), not for reviews.
+
+Failed checks are `blocked:checks-failed`; pending checks are `wait:checks-pending`. A failed merge is `fail:merge` and the sweep continues with the remaining PRs, then exits non-zero. SHA-only `github-actions` bumps report `skip:digest-update` and are never auto-merged. The step summary lists a per-PR decision table plus counters.
 
 Secret id is `TOKEN`.

@@ -8,7 +8,7 @@ Callee jobs do not set `jobs.<id>.name` unless noted. GitHub required checks mat
 
 ## Public API
 
-Consumers pin every public file at `@v2`. `@v2` is stale until `Self / Retag`.
+Consumers pin every public file at `@v2`. `@v2` moves only to published `v2.x.y` release commits (see [Releasing](#releasing)).
 
 | File                    | `name:`               | Job ids                        | Purpose                                                                                                                                                                           |
 | ----------------------- | --------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -67,15 +67,27 @@ grep -RInE '0\.2\.122|1\.94' \
 
 Not a consumer API. Required check-run name for this repository is `Self / CI`.
 
-| File                  | `name:`             | Job ids                                                                                                                                                                                              | Purpose                                                                                    |
-| --------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `tests`, `docs`, `e2e-rust`, `e2e-rust-minimal`, `e2e-bun`, `e2e-wasm`, `e2e-cross`, `e2e-publish-crates`, `e2e-hermes`, `scorecard`, `ci` | Lint the tree and run the `fixtures/` e2e jobs. Aggregator job `ci` has `name: Self / CI`. |
-| `self-release.yml`    | `Self / Release`    | `release`                                                                                                                                                                                            | `on.push.tags: ['v*.*.*']` → `$/.github/workflows/release.yml`.                            |
-| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                                                                                                                                              | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                                   |
-| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                                                                                                                                              | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`.           |
-| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                                                                                                                                              | Post-squash operator: force-move annotated `v<major>` to `origin/main`.                    |
+| File                  | `name:`             | Job ids                                                                                                                                                                                              | Purpose                                                                                             |
+| --------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `self-ci.yml`         | `Self / CI`         | `actionlint`, `zizmor`, `pinact`, `format`, `composites`, `tests`, `docs`, `e2e-rust`, `e2e-rust-minimal`, `e2e-bun`, `e2e-wasm`, `e2e-cross`, `e2e-publish-crates`, `e2e-hermes`, `scorecard`, `ci` | Lint the tree and run the `fixtures/` e2e jobs. Aggregator job `ci` has `name: Self / CI`.          |
+| `self-release.yml`    | `Self / Release`    | `validate`, `release`, `retag`                                                                                                                                                                       | `on.push.tags: ['v*.*.*']`: validate annotated `vX.Y.Z` on `main`, `release.yml`, retag `v<major>`. |
+| `self-stale.yml`      | `Self / Stale`      | `stale`                                                                                                                                                                                              | Cron `30 1 * * *` → `$/.github/workflows/ops-stale.yml`.                                            |
+| `self-dependabot.yml` | `Self / Dependabot` | `merge`                                                                                                                                                                                              | `on: schedule` + `workflow_dispatch` → `$/.github/workflows/ops-dependabot.yml`.                    |
+| `self-retag.yml`      | `Self / Retag`      | `retag`                                                                                                                                                                                              | Rollback only: force-move annotated `v<major>` to the input `vX.Y.Z` tag's commit.                  |
 
 `scorecard` is `continue-on-error: true` and is not in the aggregator `needs`.
+
+## Releasing
+
+Push an annotated `vX.Y.Z` tag on a `main` commit:
+
+```bash
+git switch main && git pull --ff-only
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+`Self / Release` validates the tag (annotated, commit reachable from `origin/main`), publishes the GitHub Release, and force-moves `v<major>` to the release commit. Consumers pin `@v2` (moving) or `@v2.x.y` (immutable). Roll back a bad `v<major>` with `Self / Retag` (`tag` input: an existing `vX.Y.Z` tag).
 
 ## Compatibility aliases
 
