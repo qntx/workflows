@@ -21,3 +21,11 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local plan
+/plan/
+
+# Fixtures build output
+/fixtures/rust/target/
+/fixtures/bun/node_modules/
+/fixtures/bun/dist/

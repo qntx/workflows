@@ -59,7 +59,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: qntx-workflows-ops-sync-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-ops-sync-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

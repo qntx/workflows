@@ -2,13 +2,13 @@ name: setup-rust
 description: Install a Rust toolchain and cache cargo artifacts.
 inputs:
   rust-version:
-    description: 'Rust toolchain to install (stable, nightly, 1.90.0, ...).'
+    description: 'Explicit toolchain (stable, nightly, 1.90.0, ...). Empty installs the working-directory rust-toolchain file if present, else stable. An explicit version wins over any toolchain file.'
     required: false
-    default: 'stable'
-  toolchain-file:
-    description: 'When true, parse channel from rust-toolchain.toml or a one-line rust-toolchain and pass it as dtolnay toolchain. Requires rust-version empty. This pin does not read the file itself.'
+    default: ''
+  working-directory:
+    description: 'Directory for rust-toolchain file discovery and version reporting, relative to GITHUB_WORKSPACE. Jailed.'
     required: false
-    default: 'false'
+    default: '.'
   components:
     description: 'Comma-separated rustup components to install. Empty = none.'
     required: false
@@ -22,33 +22,83 @@ inputs:
     required: false
     default: ''
 outputs:
-  channel:
-    description: 'Toolchain string passed to dtolnay. Parsed channel, or rust-version when toolchain-file is false.'
-    value: ${{ steps.channel.outputs.channel || inputs.rust-version }}
+  toolchain:
+    description: 'Active toolchain resolved in working-directory (rustup show active-toolchain, first field).'
+    value: ${{ steps.resolve.outputs.toolchain }}
+  rustc:
+    description: 'rustc --version as resolved in working-directory.'
+    value: ${{ steps.resolve.outputs.rustc }}
 runs:
   using: composite
   steps:
-    - id: channel
-      if: inputs.toolchain-file == 'true'
+    - name: Jail working directory
+      id: workdir
+      shell: bash
+      env:
+        REL: ${{ inputs.working-directory }}
+      run: bash "$GITHUB_ACTION_PATH/jail.sh"
+
+    - name: Plan toolchain
+      id: plan
       shell: bash
       env:
         RUST_VERSION: ${{ inputs.rust-version }}
-      run: bash "$GITHUB_ACTION_PATH/channel.sh"
+        WORK_DIR: ${{ steps.workdir.outputs.path }}
+      run: bash "$GITHUB_ACTION_PATH/plan.sh"
 
-    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
-      if: inputs.toolchain-file != 'true'
+    - name: Install explicit toolchain
+      if: steps.plan.outputs.mode == 'explicit'
+      uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
       with:
         toolchain: ${{ inputs.rust-version }}
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
 
-    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
-      if: inputs.toolchain-file == 'true'
+    # RUSTUP_TOOLCHAIN beats a rust-toolchain file, so an explicit version
+    # stays in effect even when the workspace has one.
+    - name: Export explicit toolchain
+      if: steps.plan.outputs.mode == 'explicit'
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.rust-version }}
+      run: printf 'RUSTUP_TOOLCHAIN=%s\n' "$TOOLCHAIN" >>"$GITHUB_ENV" # zizmor: ignore[github-env] charset-validated by plan.sh
+
+    - name: Install toolchain file
+      if: steps.plan.outputs.mode == 'file'
+      shell: bash
+      env:
+        WORK_DIR: ${{ steps.workdir.outputs.path }}
+        COMPONENTS: ${{ inputs.components }}
+        TARGETS: ${{ inputs.targets }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
+
+    - name: Install stable
+      if: steps.plan.outputs.mode == 'stable'
+      uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
       with:
-        toolchain: ${{ steps.channel.outputs.channel }}
+        toolchain: stable
         components: ${{ inputs.components }}
         targets: ${{ inputs.targets }}
 
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         key: ${{ inputs.cache-key }}
+        workspaces: ${{ steps.workdir.outputs.rel }}
+
+    - name: Resolve toolchain
+      id: resolve
+      shell: bash
+      env:
+        WORK_DIR: ${{ steps.workdir.outputs.path }}
+      run: |
+        set -euo pipefail
+        cd "$WORK_DIR"
+        toolchain="$(rustup show active-toolchain | awk 'NR == 1 {print $1}')"
+        printf 'toolchain=%s\n' "$toolchain" >>"$GITHUB_OUTPUT"
+        printf 'rustc=%s\n' "$(rustc --version)" >>"$GITHUB_OUTPUT"
+        {
+          echo '### Rust toolchain'
+          rustc --version
+          cargo --version
+          printf 'toolchain: %s\n' "$toolchain"
+        } >>"$GITHUB_STEP_SUMMARY"

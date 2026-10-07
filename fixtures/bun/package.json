@@ -1,0 +1,16 @@
+{
+  "name": "fixture-bun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build index.ts --outdir dist",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "bun-types": "1.4.2",
+    "prettier": "3.7.4",
+    "typescript": "5.9.3"
+  }
+}

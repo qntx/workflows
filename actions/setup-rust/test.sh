@@ -6,17 +6,6 @@ fail=0
 root="$(mktemp -d)"
 trap 'rm -rf "$root"' EXIT
 
-expect_ok() {
-  local label="$1"
-  shift
-  if "$@"; then
-    echo "ok ${label}"
-  else
-    echo "FAIL ${label} (expected ok)"
-    fail=1
-  fi
-}
-
 expect_out() {
   local label="$1" want="$2"
   shift 2
@@ -56,249 +45,163 @@ expect_fail_msg() {
   esac
 }
 
-expect_fail_silent() {
-  local label="$1"
-  shift
-  local out rc
-  set +e
-  out="$("$@" 2>/dev/null)"
-  rc=$?
-  set -e
-  if [ "$rc" -eq 0 ]; then
-    echo "FAIL ${label} (expected fail)"
-    fail=1
-    return
-  fi
-  if [ -n "$out" ]; then
-    echo "FAIL ${label}: stdout not empty: ${out}"
-    fail=1
-    return
-  fi
-  echo "ok ${label}"
-}
-
 new_ws() {
   ws="$(mktemp -d "$root/ws.XXXXXX")"
-  other="$(mktemp -d "$root/cwd.XXXXXX")"
+  wd="$(mktemp -d "$root/wd.XXXXXX")"
 }
 
-run_channel() {
-  (
-    cd "$other"
-    if [ "${RUST_VERSION+x}" = x ]; then
-      env -u GITHUB_OUTPUT GITHUB_WORKSPACE="$ws" RUST_VERSION="$RUST_VERSION" bash "$dir/channel.sh"
-    else
-      env -u GITHUB_OUTPUT -u RUST_VERSION GITHUB_WORKSPACE="$ws" bash "$dir/channel.sh"
-    fi
-  )
+plan() {
+  env -u GITHUB_OUTPUT WORK_DIR="$wd" GITHUB_WORKSPACE="${GW:-$wd}" RUST_VERSION="${RUST_VERSION-}" bash "$dir/plan.sh"
 }
 
-# The comment's version must not win. 1.94 in the comment, channel is 1.93.
-new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-# Pin to the workspace MSRV (1.94, edition 2024).
-[toolchain]
-channel = "1.93"
-components = ["rustfmt", "clippy"]
-targets = ["wasm32-unknown-unknown"]
-profile = "minimal"
-EOF
-unset RUST_VERSION
-expect_out 'comment version does not win' '1.93' run_channel
-
-# The nostr.js comment shape, channel equal to the number in the comment.
-new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-# Pin to the workspace MSRV (1.94, edition 2024).
-# channel = "nightly"
-[toolchain]
-channel = "1.94"
-components = ["rustfmt", "clippy"]
-targets = ["wasm32-unknown-unknown"]
-profile = "minimal"
-EOF
-expect_out 'nostr comment above channel' '1.94' run_channel
+plan_rv() {
+  RUST_VERSION="$1" plan
+}
 
 new_ws
-printf '%s\n' '1.94' >"$ws/rust-toolchain"
-expect_out 'one-line file' '1.94' run_channel
+expect_out 'explicit wins without file' 'explicit' plan_rv stable
 
 new_ws
-printf '%s\n' '  1.94  ' >"$ws/rust-toolchain"
-expect_out 'one-line trimmed' '1.94' run_channel
+printf '%s\n' '[toolchain]' 'channel = "1.94"' >"$wd/rust-toolchain.toml"
+expect_out 'explicit wins over toml' 'explicit' plan_rv beta
 
 new_ws
-printf '\t1.94\t\n' >"$ws/rust-toolchain"
-expect_out 'one-line tab trimmed' '1.94' run_channel
+printf '%s\n' '[toolchain]' 'channel = "1.94"' >"$wd/rust-toolchain.toml"
+expect_out 'toml gives file' 'file' plan
 
 new_ws
-cat >"$ws/rust-toolchain" <<'EOF'
-
-# comment with 1.94
-[toolchain]
-1.94
-
-EOF
-expect_out 'one-line ignores comment and section' '1.94' run_channel
+printf '%s\n' '1.94' >"$wd/rust-toolchain"
+expect_out 'plain file gives file' 'file' plan
 
 new_ws
-printf '%s\n' 'channel = "nightly"' >"$ws/rust-toolchain"
-expect_out 'plain file toml form' 'nightly' run_channel
+mkdir "$wd/rust-toolchain.toml"
+expect_out 'toml directory is not the file' 'stable' plan
 
 new_ws
-printf '%s\n' '1.94' >"$ws/rust-toolchain"
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-# Pin to the workspace MSRV (1.94, edition 2024).
-channel = "nightly"
-EOF
-expect_out 'toml wins over plain file' 'nightly' run_channel
+expect_out 'no file gives stable' 'stable' plan
 
 new_ws
-printf '%s\n' '1.94' >"$ws/rust-toolchain"
-printf '\n' >"$ws/rust-toolchain.toml"
-expect_fail_silent 'empty toml does not fall through' run_channel
-
-new_ws
-mkdir "$ws/rust-toolchain.toml"
-printf '%s\n' 'stable' >"$ws/rust-toolchain"
-expect_out 'toml directory is not the file' 'stable' run_channel
-
-new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-channel = "nightly-2024-01-01"
-EOF
-expect_out 'dated nightly' 'nightly-2024-01-01' run_channel
-
-new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-  channel="1.94.0"
-EOF
-expect_out 'tight quotes and patch' '1.94.0' run_channel
-
-new_ws
-printf 'channel\t=\t"1.94"\n' >"$ws/rust-toolchain.toml"
-expect_out 'tab around equals' '1.94' run_channel
-
-new_ws
-printf '%s\n' 'channel = "beta"' >"$ws/rust-toolchain.toml"
-RUST_VERSION=''
-expect_out 'empty rust-version is allowed' 'beta' run_channel
-unset RUST_VERSION
-
-new_ws
-printf '%s\n' 'channel = "beta"' >"$ws/rust-toolchain.toml"
+printf '%s\n' 'channel = "beta"' >"$wd/rust-toolchain.toml"
 out="$(mktemp "$root/out.XXXXXX")"
-(
-  cd "$other"
-  GITHUB_WORKSPACE="$ws" GITHUB_OUTPUT="$out" bash "$dir/channel.sh" >"$root/stdout.txt"
-)
-if [ "$(cat "$root/stdout.txt")" = beta ] && [ "$(wc -l <"$out" | tr -d '[:space:]')" -eq 1 ] && [ "$(cat "$out")" = 'channel=beta' ]; then
-  echo 'ok github output line'
+WORK_DIR="$wd" RUST_VERSION='' GITHUB_OUTPUT="$out" bash "$dir/plan.sh" >/dev/null
+if [ "$(cat "$out")" = 'mode=file' ]; then
+  echo 'ok github output mode'
 else
-  echo "FAIL github output line stdout=$(cat "$root/stdout.txt") file=$(cat "$out")"
+  echo "FAIL github output mode: $(cat "$out")"
   fail=1
 fi
 
 new_ws
-printf '%s\n' '1.94' 'nightly' >"$ws/rust-toolchain"
-expect_fail_silent 'two bare lines' run_channel
+expect_fail_msg 'rust-version charset' 'charset' plan_rv '1.94;rm'
 
 new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-channel = "1.94"
-channel = "1.94"
-EOF
-expect_fail_silent 'two identical assignments' run_channel
+expect_fail_msg 'missing work dir' 'not found' env -u GITHUB_OUTPUT WORK_DIR="$root/no-such-dir" RUST_VERSION='' bash "$dir/plan.sh"
 
+# rustup walks up from the working directory; the walk must stop at
+# GITHUB_WORKSPACE (inclusive) like the caller jail does.
+ws_anc="$(mktemp -d "$root/ancws.XXXXXX")"
+mkdir -p "$ws_anc/sub/deep"
+printf '%s\n' '[toolchain]' 'channel = "1.94"' >"$ws_anc/rust-toolchain.toml"
+wd="$ws_anc/sub/deep"
+expect_out 'ancestor file inside workspace' 'file' env -u GITHUB_OUTPUT WORK_DIR="$wd" GITHUB_WORKSPACE="$ws_anc" RUST_VERSION='' bash "$dir/plan.sh"
+
+ws_above="$(mktemp -d "$root/abovews.XXXXXX")"
+mkdir -p "$ws_above/sub"
+printf '%s\n' '[toolchain]' 'channel = "1.94"' >"$root/rust-toolchain.toml"
+wd="$ws_above/sub"
+expect_out 'file above workspace ignored' 'stable' env -u GITHUB_OUTPUT WORK_DIR="$wd" GITHUB_WORKSPACE="$ws_above" RUST_VERSION='' bash "$dir/plan.sh"
+rm -f "$root/rust-toolchain.toml"
 new_ws
-cat >"$ws/rust-toolchain.toml" <<'EOF'
-# only a comment 1.94
-[toolchain]
-profile = "minimal"
-EOF
-expect_fail_msg 'no channel assignment' 'exactly one channel' run_channel
 
-new_ws
-expect_fail_msg 'missing files' 'not found' run_channel
+# install.sh charset gates reject metacharacters before rustup runs.
+expect_fail_msg 'components charset ;' 'components charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" COMPONENTS='rustfmt;rm' bash "$dir/install.sh"
+expect_fail_msg 'components charset @' 'components charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" COMPONENTS='rustfmt@x' bash "$dir/install.sh"
+expect_fail_msg 'components charset [' 'components charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" COMPONENTS='rust[fmt' bash "$dir/install.sh"
+expect_fail_msg 'targets charset ;' 'targets charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" TARGETS='wasm32;rm' bash "$dir/install.sh"
+expect_fail_msg 'targets charset @' 'targets charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" TARGETS='wasm32@x' bash "$dir/install.sh"
+expect_fail_msg 'targets charset [' 'targets charset' env -u GITHUB_OUTPUT WORK_DIR="$wd" TARGETS='wasm32[x' bash "$dir/install.sh"
 
-new_ws
-printf '%s\n' 'channel = "1.94"' >"$ws/rust-toolchain.toml"
-RUST_VERSION='stable'
-expect_fail_msg 'rust-version stable' 'rust-version must be empty' run_channel
-RUST_VERSION=' '
-expect_fail_msg 'rust-version whitespace' 'rust-version must be empty' run_channel
-unset RUST_VERSION
+# Jail: reuse the setup-wasm contract at a smaller surface.
+ws_root="$(mktemp -d "$root/wsroot.XXXXXX")"
+mkdir -p "$ws_root/packages/foo" "$ws_root/outside-parent"
+outside="$(mktemp -d "$root/outside.XXXXXX")"
+ln -s "$outside" "$ws_root/outlink"
 
-new_ws
-printf '%s\n' 'channel = "1.94;rm"' >"$ws/rust-toolchain.toml"
-expect_fail_msg 'charset semicolon' 'charset' run_channel
+jail() {
+  GITHUB_WORKSPACE="$ws_root" REL="$1" bash "$dir/jail.sh"
+}
 
-new_ws
-printf '%s\n' 'channel = "has space"' >"$ws/rust-toolchain.toml"
-expect_fail_msg 'charset space' 'charset' run_channel
+expect_out 'jail dot' "$(realpath "$ws_root")" jail '.'
+expect_out 'jail subdir' "$(realpath "$ws_root/packages/foo")" jail 'packages/foo'
+expect_fail_msg 'dotdot stays inside' 'empty or ..' jail 'packages/../outside-parent'
+expect_fail_msg 'leading dotdot' 'start with .' jail '../b'
+expect_fail_msg 'absolute' 'relative' jail '/etc'
+expect_fail_msg 'charset' 'charset' jail 'foo;rm'
+expect_fail_msg 'missing dir' 'does not exist' jail 'missing-dir'
+expect_fail_msg 'symlink escape' 'escapes workspace' jail 'outlink'
 
-new_ws
-printf '%s\n' 'channel = ""' >"$ws/rust-toolchain.toml"
-expect_fail_msg 'empty channel' 'charset' run_channel
-
-new_ws
-printf '%s\n' 'channel = "1.94.0-x86_64-unknown-linux-gnu"' >"$ws/rust-toolchain.toml"
-expect_out 'underscore is in the charset' '1.94.0-x86_64-unknown-linux-gnu' run_channel
-
-new_ws
-printf '%s\n' 'channel = "beta@nightly"' >"$ws/rust-toolchain.toml"
-expect_fail_msg 'charset at' 'charset' run_channel
-
-new_ws
-printf '%s\n' 'channel = "stable/gnu"' >"$ws/rust-toolchain.toml"
-expect_fail_msg 'charset slash' 'charset' run_channel
-
-new_ws
-printf '%s\n' "channel = 'beta'" >"$ws/rust-toolchain.toml"
-expect_fail_silent 'single quotes are not toml channel' run_channel
-
-new_ws
-printf '%s\n' 'channel = "beta" # trailing' >"$ws/rust-toolchain.toml"
-expect_fail_silent 'trailing comment is not an assignment' run_channel
-
-new_ws
-printf '%s\n' '# only' >"$ws/rust-toolchain"
-expect_fail_silent 'comment-only plain file' run_channel
-
-(
-  cd "$other"
-  env -u GITHUB_WORKSPACE bash "$dir/channel.sh" >/dev/null 2>&1
-) && {
-  echo 'FAIL unset workspace (expected fail)'
+out="$(mktemp "$root/out.XXXXXX")"
+GITHUB_WORKSPACE="$ws_root" REL='packages/foo' GITHUB_OUTPUT="$out" bash "$dir/jail.sh" >/dev/null
+if grep -q '^rel=packages/foo$' "$out" && grep -q "^path=$(realpath "$ws_root/packages/foo")$" "$out"; then
+  echo 'ok jail outputs path and rel'
+else
+  echo "FAIL jail outputs: $(cat "$out")"
   fail=1
-} || echo 'ok unset workspace'
+fi
+out="$(mktemp "$root/out.XXXXXX")"
+GITHUB_WORKSPACE="$ws_root" REL='.' GITHUB_OUTPUT="$out" bash "$dir/jail.sh" >/dev/null
+if grep -q '^rel=\.$' "$out"; then
+  echo 'ok jail rel dot'
+else
+  echo "FAIL jail rel dot: $(cat "$out")"
+  fail=1
+fi
 
-# Wiring: both dtolnay steps pass toolchain. The pin does not read the file.
 action="$dir/action.yml"
 if [ "$(grep -c 'dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772' "$action")" -eq 2 ] &&
   [ "$(grep -c 'Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6' "$action")" -eq 1 ] &&
-  grep -q 'toolchain: ${{ inputs.rust-version }}' "$action" &&
-  grep -q 'toolchain: ${{ steps.channel.outputs.channel }}' "$action" &&
-  grep -q "if: inputs.toolchain-file == 'true'" "$action" &&
-  grep -q "if: inputs.toolchain-file != 'true'" "$action" &&
-  grep -q 'default: '"'"'stable'"'"'' "$action" &&
-  grep -q 'default: '"'"'false'"'"'' "$action" &&
-  grep -q 'steps.channel.outputs.channel || inputs.rust-version' "$action" &&
-  grep -q 'bash "$GITHUB_ACTION_PATH/channel.sh"' "$action"; then
+  grep -F 'toolchain: ${{ inputs.rust-version }}' "$action" >/dev/null &&
+  grep -F 'toolchain: stable' "$action" >/dev/null &&
+  grep -F "if: steps.plan.outputs.mode == 'explicit'" "$action" >/dev/null &&
+  grep -F "if: steps.plan.outputs.mode == 'file'" "$action" >/dev/null &&
+  grep -F "if: steps.plan.outputs.mode == 'stable'" "$action" >/dev/null &&
+  grep -F 'RUSTUP_TOOLCHAIN' "$action" >/dev/null &&
+  grep -F 'rustup show active-toolchain' "$action" >/dev/null &&
+  grep -F 'bash "$GITHUB_ACTION_PATH/plan.sh"' "$action" >/dev/null &&
+  grep -F 'bash "$GITHUB_ACTION_PATH/install.sh"' "$action" >/dev/null &&
+  grep -F 'bash "$GITHUB_ACTION_PATH/jail.sh"' "$action" >/dev/null &&
+  grep -F "default: ''" "$action" >/dev/null &&
+  grep -F 'steps.resolve.outputs.toolchain' "$action" >/dev/null &&
+  grep -F 'steps.resolve.outputs.rustc' "$action" >/dev/null &&
+  grep -F 'workspaces: ${{ steps.workdir.outputs.rel }}' "$action" >/dev/null; then
   echo 'ok action wiring'
 else
   echo 'FAIL action wiring'
   fail=1
 fi
 
-if grep -nE '0\.2\.122|1\.94' "$action" "$dir/channel.sh"; then
-  echo 'FAIL hardcoded channel or bindgen version'
+if [ -e "$dir/channel.sh" ] || grep -q 'channel\.sh' "$action"; then
+  echo 'FAIL channel.sh remains or is referenced'
+  fail=1
+else
+  echo 'ok no channel.sh'
+fi
+
+if grep -qE '^  (toolchain-file|channel):' "$action"; then
+  echo 'FAIL obsolete toolchain-file input or channel output remains'
+  fail=1
+else
+  echo 'ok no obsolete toolchain-file or channel'
+fi
+
+if grep -nE '0\.2\.122|1\.94' "$action" "$dir/plan.sh" "$dir/jail.sh" "$dir/install.sh"; then
+  echo 'FAIL hardcoded version'
   fail=1
 else
   echo 'ok no hardcoded version'
 fi
 
-if grep -n 'set -x' "$action" "$dir/channel.sh"; then
+if grep -n 'set -x' "$action" "$dir/plan.sh" "$dir/jail.sh" "$dir/install.sh"; then
   echo 'FAIL set -x'
   fail=1
 else

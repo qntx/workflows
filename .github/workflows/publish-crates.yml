@@ -24,10 +24,10 @@ on:
         type: string
         default: ''
       rust-version:
-        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+        description: 'Rust toolchain. Empty honours the working-directory rust-toolchain file, else stable.'
         required: false
         type: string
-        default: 'stable'
+        default: ''
       apt-packages:
         description: 'Extra apt packages to install (space-separated).'
         required: false
@@ -42,7 +42,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: qntx-workflows-publish-crates-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-publish-crates-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -68,6 +68,7 @@ jobs:
       - uses: $/actions/setup-rust
         with:
           rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}
 
       - name: Format
         run: cargo fmt --all --check

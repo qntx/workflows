@@ -27,10 +27,10 @@ on:
         type: string
         default: ''
       rust-version:
-        description: 'Rust toolchain (stable, beta, nightly, or a pinned version).'
+        description: 'Rust toolchain. Empty honours the repository rust-toolchain file, else stable.'
         required: false
         type: string
-        default: 'stable'
+        default: ''
     outputs:
       release-url:
         description: 'URL of the created GitHub Release.'
@@ -43,7 +43,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:

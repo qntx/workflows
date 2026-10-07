@@ -160,6 +160,31 @@ jobs:
     with:
       docs-path: actions/validate-docs-tree/fixtures/valid-docs
 
+  e2e-rust:
+    uses: $/.github/workflows/ci-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust
+      deny: true
+
+  e2e-rust-minimal:
+    uses: $/.github/workflows/ci-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust
+      features: --no-default-features
+      doc: true
+      package-check: true
+
+  e2e-bun:
+    uses: $/.github/workflows/ci-bun.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/bun
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -189,7 +214,19 @@ jobs:
   ci:
     name: Self / CI
     if: always()
-    needs: [actionlint, zizmor, pinact, format, composites, tests, docs]
+    needs:
+      [
+        actionlint,
+        zizmor,
+        pinact,
+        format,
+        composites,
+        tests,
+        docs,
+        e2e-rust,
+        e2e-rust-minimal,
+        e2e-bun,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -203,7 +240,10 @@ jobs:
           || needs.format.result != 'success'
           || needs.composites.result != 'success'
           || needs.tests.result != 'success'
-          || needs.docs.result != 'success' }}
+          || needs.docs.result != 'success'
+          || needs.e2e-rust.result != 'success'
+          || needs.e2e-rust-minimal.result != 'success'
+          || needs.e2e-bun.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

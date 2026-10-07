@@ -70,7 +70,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: qntx-workflows-release-${{ github.repository }}-${{ github.ref }}
+  group: qntx-workflows-release-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

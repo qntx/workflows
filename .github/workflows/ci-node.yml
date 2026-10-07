@@ -42,10 +42,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: qntx-workflows-ci-node-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   ci:
     runs-on: ${{ inputs.runs-on }}
