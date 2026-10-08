@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-08
+
 ### Changed
 
 - `publish-npm` skips `npm publish` when the package version is already on the registry (rerun after a partial release, or a first version published by hand before trusted publishing can be configured). Any `npm view` failure other than 404 fails the job.
