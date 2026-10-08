@@ -27,4 +27,5 @@ jobs:
       bench: true
       # rust-checks: false   # when a sibling ci-rust job runs fmt/clippy/test
       # scripts: parity:check   # extra package scripts run after test:wasm
+      # scripts-directory: e2e   # where the extra scripts run; empty means working-directory
       # dist-export: ./wasm   # exports key checked by the dist contract; . selects the root export

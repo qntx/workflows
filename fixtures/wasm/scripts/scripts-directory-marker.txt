@@ -1,0 +1,1 @@
+e2e-wasm-scripts-dir proves ci-wasm's Extra scripts step ran in this directory: the marker only exists here.

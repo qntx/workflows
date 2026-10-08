@@ -21,5 +21,6 @@ jobs:
     with:
       # rust-version: stable   # default '' honours <working-directory>/rust-toolchain{,.toml}, else stable
       # deny: true   # requires deny.toml next to Cargo.toml
+      # packages: my-crate other-crate   # per-package -p runs; no feature unification across members
       # doc: true    # cargo doc --workspace --no-deps with RUSTDOCFLAGS=-D warnings
       # package-check: true   # cargo publish --workspace --dry-run --locked

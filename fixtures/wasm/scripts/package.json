@@ -1,0 +1,8 @@
+{
+  "name": "fixture-wasm-scripts",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "e2e:scripts-dir": "test -f scripts-directory-marker.txt"
+  }
+}
