@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `publish-npm.yml` gains a `dist-export` input (`./wasm` default, `.` for a dedicated wasm package) forwarded to both `setup-wasm` calls; without it the package contract check hardcoded `./wasm` and a dedicated wasm package could not be published.
+
+### Added
+
+- `publish-npm.yml` `dry-run` input: runs every step as usual but publishes with `npm publish --dry-run` (no `--provenance`; the OIDC token is unused and the npm >= 11.5.1 gate is skipped).
+- `e2e-publish-npm` (`fixtures/npm`, scoped fixture name) and `e2e-publish-npm-wasm` (`fixtures/wasm` with `wasm: true`, `dist-export: .`) in Self / CI cover the publish paths end to end.
+
 ## [2.4.0] - 2026-10-08
 
 ### Changed

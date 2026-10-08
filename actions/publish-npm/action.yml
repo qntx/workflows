@@ -23,6 +23,14 @@ inputs:
     description: 'Skip the generic build, run build:wasm once, publish with --ignore-scripts. Requires setup-wasm earlier in the job.'
     required: false
     default: 'false'
+  dist-export:
+    description: 'Package exports key checked by the wasm dist contract. "." selects the root export of a dedicated wasm package.'
+    required: false
+    default: './wasm'
+  dry-run:
+    description: 'Publish with npm publish --dry-run instead of --provenance. The npm >= 11.5.1 gate is skipped.'
+    required: false
+    default: 'false'
 outputs:
   package:
     value: ${{ steps.pkg.outputs.package }}
@@ -130,6 +138,7 @@ runs:
         dist-check: true
         package-directory: ${{ inputs.working-directory }}
         package-manager: ${{ inputs.package-manager }}
+        dist-export: ${{ inputs.dist-export }}
 
     - name: Test
       shell: bash
@@ -192,15 +201,20 @@ runs:
       env:
         ACCESS: ${{ inputs.access }}
         WASM: ${{ inputs.wasm }}
+        DRY_RUN: ${{ inputs.dry-run }}
       run: |
         set -euo pipefail
+        args=(--access "$ACCESS")
+        if [ "$WASM" = true ]; then
+          args+=(--ignore-scripts)
+        fi
+        if [ "$DRY_RUN" = true ]; then
+          npm publish "${args[@]}" --dry-run
+          exit 0
+        fi
         npm_v="$(npm --version)"
         if [ "$(printf '11.5.1\n%s\n' "$npm_v" | sort -V | head -n1)" != '11.5.1' ]; then
           echo "::error::npm ${npm_v} does not support OIDC trusted publishing (needs npm >= 11.5.1; raise node-version)"
           exit 1
         fi
-        args=(--access "$ACCESS" --provenance)
-        if [ "$WASM" = true ]; then
-          args+=(--ignore-scripts)
-        fi
-        npm publish "${args[@]}"
+        npm publish "${args[@]}" --provenance

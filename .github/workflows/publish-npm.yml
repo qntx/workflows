@@ -2,7 +2,8 @@ name: Publish / npm
 
 # OIDC trusted publishing only. The caller job must grant `id-token: write`
 # and each package needs a Trusted Publisher on npmjs.com naming the caller
-# repository and this workflow. `npm publish` always passes `--provenance`.
+# repository and this workflow. `npm publish` always passes `--provenance`
+# unless `dry-run` is set, which publishes with `--dry-run` and no provenance.
 
 on:
   workflow_call:
@@ -57,6 +58,16 @@ on:
         required: false
         type: string
         default: '.'
+      dist-export:
+        description: 'Package exports key checked by the wasm package and dist contracts. Used only when wasm is true. "." selects the root export of a dedicated wasm package.'
+        required: false
+        type: string
+        default: './wasm'
+      dry-run:
+        description: 'Run every step as usual but publish with npm publish --dry-run (no --provenance; the OIDC token is unused). The already-published check still runs.'
+        required: false
+        type: boolean
+        default: false
     outputs:
       package:
         description: 'package.json name'
@@ -93,6 +104,7 @@ jobs:
           toolchain: true
           dist-check: false
           cargo-directory: ${{ inputs.cargo-directory }}
+          dist-export: ${{ inputs.dist-export }}
           package-directory: ${{ inputs.working-directory }}
           package-manager: ${{ inputs.package-manager }}
           install-directory: ${{ inputs.install-directory }}
@@ -108,3 +120,5 @@ jobs:
           bun-version: ${{ inputs.bun-version }}
           access: ${{ inputs.access }}
           wasm: ${{ inputs.wasm }}
+          dist-export: ${{ inputs.dist-export }}
+          dry-run: ${{ inputs.dry-run }}
