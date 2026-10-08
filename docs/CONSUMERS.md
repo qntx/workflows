@@ -214,6 +214,8 @@ Each npm package needs its own Trusted Publisher. Caller owns which packages to 
 
 Set `wasm: true` only together with `timeout-minutes: 30` (`with:`, not a job key). That path runs `setup-wasm` in the publish job, runs `build:wasm` once, and adds `--ignore-scripts`. `wasm: false` keeps the current publish path and the 15 minute timeout. Do not pass a bindgen version. Do not `uses:` `actions/setup-wasm`. `@v2` does not move on merge. Copy `examples/publish-npm-wasm.yml`.
 
+`dist-export` names the `exports` key the wasm package/dist contracts check (default `./wasm`). A dedicated wasm package whose root export is the loader sets `dist-export: .`. `dry-run: true` runs install/build/wasm checks and the already-published lookup as usual, then publishes with `npm publish --dry-run` (no `--provenance`, so the OIDC token is unused — keep `id-token: write` on the caller job anyway).
+
 ```yaml
 # Caller owns on:. Pin at @v2.
 # OIDC. Do not set environment, runs-on, or steps.

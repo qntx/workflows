@@ -1,11 +1,10 @@
 {
-  "name": "fixture-wasm",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "name": "@qntx-workflows-e2e/wasm-fixture",
+  "version": "0.0.1",
   "files": [
     "dist"
   ],
+  "type": "module",
   "sideEffects": [
     "**/*.wasm"
   ],

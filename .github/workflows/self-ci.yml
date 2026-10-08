@@ -216,6 +216,32 @@ jobs:
       packages: fixture-a fixture-b
       dry-run: true
 
+  e2e-publish-npm:
+    uses: $/.github/workflows/publish-npm.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      package-manager: bun
+      install-directory: fixtures/npm
+      working-directory: fixtures/npm
+      dry-run: true
+
+  e2e-publish-npm-wasm:
+    uses: $/.github/workflows/publish-npm.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      package-manager: bun
+      wasm: true
+      timeout-minutes: 30
+      install-directory: fixtures/wasm
+      working-directory: fixtures/wasm
+      cargo-directory: fixtures/wasm
+      dist-export: .
+      dry-run: true
+
   e2e-hermes:
     uses: $/.github/workflows/ci-hermes.yml
     permissions:
@@ -269,6 +295,8 @@ jobs:
         e2e-wasm,
         e2e-cross,
         e2e-publish-crates,
+        e2e-publish-npm,
+        e2e-publish-npm-wasm,
         e2e-hermes,
       ]
     runs-on: ubuntu-latest
@@ -291,6 +319,8 @@ jobs:
           || needs.e2e-wasm.result != 'success'
           || needs.e2e-cross.result != 'success'
           || needs.e2e-publish-crates.result != 'success'
+          || needs.e2e-publish-npm.result != 'success'
+          || needs.e2e-publish-npm-wasm.result != 'success'
           || needs.e2e-hermes.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
