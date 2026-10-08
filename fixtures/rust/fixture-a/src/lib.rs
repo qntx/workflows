@@ -13,6 +13,13 @@ pub fn extra() -> &'static str {
     "extra"
 }
 
+/// Marker present only when `extra` is off.
+#[cfg(not(feature = "extra"))]
+#[must_use]
+pub fn minimal() -> &'static str {
+    "minimal"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,6 +44,6 @@ mod tests {
     #[cfg(not(feature = "extra"))]
     #[test]
     fn minimal_build_has_no_extra() {
-        assert!(!cfg!(feature = "extra"));
+        assert_eq!(minimal(), "minimal");
     }
 }
