@@ -6,7 +6,7 @@ inputs:
     required: false
     default: 'true'
   dist-check:
-    description: 'When true, require exports["./wasm"] under dist/ and at least one dist/*.wasm.'
+    description: 'When true, require the dist-export entry to resolve under dist/ and at least one dist/*.wasm.'
     required: false
     default: 'false'
   apt-packages:
@@ -42,7 +42,7 @@ inputs:
     required: false
     default: '.'
   dist-export:
-    description: 'Package exports key checked by the package and dist contracts.'
+    description: 'Package exports key checked by the package and dist contracts. "." selects the root export of a dedicated wasm package.'
     required: false
     default: './wasm'
 runs:

@@ -11,18 +11,13 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.mjs"
-    },
-    "./wasm": {
       "import": "./dist/wasm.mjs"
     }
   },
   "scripts": {
-    "build": "bun build src/index.ts --outfile dist/index.mjs --format esm",
-    "build:wasm": "cargo build --release --target wasm32-unknown-unknown && mkdir -p dist && cp target/wasm32-unknown-unknown/release/fixture_wasm.wasm dist/ && bun run build && bun build src/wasm.ts --outfile dist/wasm.mjs --format esm",
+    "build:wasm": "cargo build --release --target wasm32-unknown-unknown && mkdir -p dist && cp target/wasm32-unknown-unknown/release/fixture_wasm.wasm dist/ && bun build src/wasm.ts --outfile dist/wasm.mjs --format esm",
     "test:wasm": "bun test",
-    "test:extra": "bun -e \"console.log('extra ok')\"",
-    "prepublishOnly": "bun run build:wasm"
+    "test:extra": "bun -e \"console.log('extra ok')\""
   },
   "devEngines": {
     "packageManager": {

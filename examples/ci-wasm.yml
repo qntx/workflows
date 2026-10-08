@@ -27,4 +27,4 @@ jobs:
       bench: true
       # rust-checks: false   # when a sibling ci-rust job runs fmt/clippy/test
       # scripts: parity:check   # extra package scripts run after test:wasm
-      # dist-export: ./wasm   # exports key checked by the dist contract
+      # dist-export: ./wasm   # exports key checked by the dist contract; . selects the root export
