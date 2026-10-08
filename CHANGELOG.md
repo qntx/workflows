@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-08
+
 ### Changed
 
 - `ci-bun.yml` Test runs `bun run test` when `scripts.test` is defined; the file heuristic + `bun test` is only the fallback. The heuristic cannot see monorepo tests (`packages/*/tests/*`) and could run a different runner than the declared script.
