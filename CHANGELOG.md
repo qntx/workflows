@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-08
+
 ### Added
 
 - `ci-wasm.yml` input `scripts-directory`: the Extra scripts step runs there instead of `working-directory` when set.
