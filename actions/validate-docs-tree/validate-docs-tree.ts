@@ -52,8 +52,7 @@ export type ValidateOptions = {
 };
 
 export type JailResult =
-  | { ok: true; root: string }
-  | { ok: false; errors: string[] };
+  { ok: true; root: string } | { ok: false; errors: string[] };
 
 function isInside(root: string, candidate: string): boolean {
   const rel = relative(root, candidate);
