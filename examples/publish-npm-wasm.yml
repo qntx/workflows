@@ -1,5 +1,5 @@
 # Caller owns on:. Pin at @v2.
-# OIDC. Do not pass NPM_TOKEN. Do not set environment, runs-on, or steps.
+# OIDC. Do not set environment, runs-on, or steps.
 # Required check-run on a tag: publish / publish.
 name: Publish
 

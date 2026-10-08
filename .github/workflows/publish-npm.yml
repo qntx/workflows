@@ -1,8 +1,8 @@
 name: Publish / npm
 
-# Token and OIDC need different job permissions; GitHub will not let one job
-# request id-token: write when the caller only granted contents: read.
-# jobs.publish = token. jobs.oidc = OIDC. Both set name: publish.
+# OIDC trusted publishing only. The caller job must grant `id-token: write`
+# and each package needs a Trusted Publisher on npmjs.com naming the caller
+# repository and this workflow. `npm publish` always passes `--provenance`.
 
 on:
   workflow_call:
@@ -33,7 +33,7 @@ on:
         type: string
         default: 'npm'
       node-version:
-        description: 'Node.js for npm CLI (>=24 ships npm 11 for OIDC).'
+        description: 'Node.js for npm CLI (trusted publishing needs npm >= 11.5.1; Node 24 ships it).'
         required: false
         type: string
         default: '24'
@@ -47,16 +47,6 @@ on:
         required: false
         type: string
         default: 'public'
-      registry-url:
-        description: 'npm registry URL.'
-        required: false
-        type: string
-        default: 'https://registry.npmjs.org'
-      provenance:
-        description: 'Ignored on the token path. OIDC path always passes --provenance.'
-        required: false
-        type: boolean
-        default: true
       wasm:
         description: 'When true, setup-wasm runs in the publish job and npm publish gets --ignore-scripts after one build:wasm. Callers set timeout-minutes to 30. Default false keeps the current publish path and the 15 minute timeout.'
         required: false
@@ -67,17 +57,13 @@ on:
         required: false
         type: string
         default: '.'
-    secrets:
-      NPM_TOKEN:
-        description: 'Optional. When set, token path is used and provenance is off.'
-        required: false
     outputs:
       package:
         description: 'package.json name'
-        value: ${{ jobs.publish.outputs.package || jobs.oidc.outputs.package }}
+        value: ${{ jobs.publish.outputs.package }}
       version:
         description: 'package.json version'
-        value: ${{ jobs.publish.outputs.version || jobs.oidc.outputs.version }}
+        value: ${{ jobs.publish.outputs.version }}
 
 permissions:
   contents: read
@@ -87,71 +73,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  route:
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      mode: ${{ steps.r.outputs.mode }}
-    steps:
-      - id: r
-        env:
-          TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${TOKEN}" ]; then
-            echo 'mode=token' >>"$GITHUB_OUTPUT"
-          else
-            echo 'mode=oidc' >>"$GITHUB_OUTPUT"
-          fi
-
   publish:
-    name: publish
-    needs: route
-    if: ${{ needs.route.outputs.mode == 'token' }}
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: ${{ inputs.timeout-minutes }}
-    permissions:
-      contents: read
-    outputs:
-      package: ${{ steps.run.outputs.package }}
-      version: ${{ steps.run.outputs.version }}
-    steps:
-      - uses: $/actions/hardened-checkout
-        with:
-          persist-credentials: false
-      - name: Set up wasm toolchain
-        if: ${{ inputs.wasm }}
-        uses: $/actions/setup-wasm
-        with:
-          toolchain: true
-          dist-check: false
-          cargo-directory: ${{ inputs.cargo-directory }}
-          package-directory: ${{ inputs.working-directory }}
-          package-manager: ${{ inputs.package-manager }}
-          install-directory: ${{ inputs.install-directory }}
-          targets: wasm32-unknown-unknown
-          cache-key: wasm32
-      - id: run
-        uses: $/actions/publish-npm
-        with:
-          install-directory: ${{ inputs.install-directory }}
-          working-directory: ${{ inputs.working-directory }}
-          package-manager: ${{ inputs.package-manager }}
-          node-version: ${{ inputs.node-version }}
-          bun-version: ${{ inputs.bun-version }}
-          access: ${{ inputs.access }}
-          registry-url: ${{ inputs.registry-url }}
-          provenance: false
-          wasm: ${{ inputs.wasm }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  oidc:
-    name: publish
-    needs: route
-    if: ${{ needs.route.outputs.mode == 'oidc' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
@@ -185,6 +107,4 @@ jobs:
           node-version: ${{ inputs.node-version }}
           bun-version: ${{ inputs.bun-version }}
           access: ${{ inputs.access }}
-          registry-url: ${{ inputs.registry-url }}
-          provenance: true
           wasm: ${{ inputs.wasm }}

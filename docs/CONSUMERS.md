@@ -173,7 +173,7 @@ jobs:
 
 ## Publish / npm
 
-OIDC (no `NPM_TOKEN`):
+OIDC trusted publishing only; `npm publish` always runs with `--provenance`:
 
 ```yaml
 permissions:
@@ -181,14 +181,7 @@ permissions:
   id-token: write
 ```
 
-Token-only (`NPM_TOKEN` set). Provenance is off. The token job requests only `contents: read`. Do not grant `id-token`:
-
-```yaml
-permissions:
-  contents: read
-secrets:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
+Each npm package needs its own Trusted Publisher on npmjs.com naming the **caller repository** and the **caller workflow filename** (the file that `uses:` `publish-npm.yml`). The caller job must grant `id-token: write`. There is no `NPM_TOKEN` path and no `registry-url` input: trusted publishing exists only on registry.npmjs.org. The npm CLI must be >= 11.5.1 (default `node-version: '24'` ships it); the job fails clearly otherwise.
 
 Former `publish-npm-bun.yml` callers pass `package-manager: bun`.
 
@@ -211,17 +204,15 @@ jobs:
       package-manager: pnpm
 ```
 
-Each npm package needs its own Trusted Publisher (or `NPM_TOKEN`). Caller owns which packages to publish; this workflow does not scan git diffs or run Changesets.
+Each npm package needs its own Trusted Publisher. Caller owns which packages to publish; this workflow does not scan git diffs or run Changesets.
 
 ### wasm
 
 Set `wasm: true` only together with `timeout-minutes: 30` (`with:`, not a job key). That path runs `setup-wasm` in the publish job, runs `build:wasm` once, and adds `--ignore-scripts`. `wasm: false` keeps the current publish path and the 15 minute timeout. Do not pass a bindgen version. Do not `uses:` `actions/setup-wasm`. `@v2` does not move on merge. Copy `examples/publish-npm-wasm.yml`.
 
-Token job stays `provenance: false`. OIDC job stays `provenance: true`. The workflow `provenance` input does not override those.
-
 ```yaml
 # Caller owns on:. Pin at @v2.
-# OIDC. Do not pass NPM_TOKEN. Do not set environment, runs-on, or steps.
+# OIDC. Do not set environment, runs-on, or steps.
 # Required check-run on a tag: publish / publish.
 name: Publish
 
@@ -247,16 +238,7 @@ jobs:
 
 ## Publish / PyPI
 
-OIDC (no `PYPI_TOKEN`):
-
-```yaml
-permissions:
-  contents: read
-  id-token: write
-  attestations: write
-```
-
-Token-only (`PYPI_TOKEN` set). Attestations are off. The token job requests only `contents: read`. Do not grant `id-token` or `attestations`:
+Token only; `PYPI_TOKEN` is required:
 
 ```yaml
 permissions:
@@ -264,6 +246,8 @@ permissions:
 secrets:
   PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
 ```
+
+PyPI trusted publishing does not support reusable workflows from another repository ([pypi/warehouse#11096](https://github.com/pypi/warehouse/issues/11096)), so an OIDC path can never succeed from a caller repo. Do not grant `id-token` or `attestations`.
 
 The workflow secret id is `PYPI_TOKEN`, not `PYPI_API_TOKEN`.
 
@@ -395,3 +379,12 @@ Defaults: squash; `semver-patch`, `version-update:lockfile-only`, and `semver-mi
 Failed checks are `blocked:checks-failed`; pending checks are `wait:checks-pending`. A failed merge is `fail:merge` and the sweep continues with the remaining PRs, then exits non-zero. SHA-only `github-actions` bumps report `skip:digest-update` and are never auto-merged. The step summary lists a per-PR decision table plus counters.
 
 Secret id is `TOKEN`.
+
+## Dependabot configuration
+
+Copy `examples/dependabot.yml` to `.github/dependabot.yml` and keep only the ecosystems the repository uses (`bun` or `npm`, `cargo`, `github-actions`).
+
+- `cooldown: default-days: 7` enforces the org rule that adopted releases are at least 7 days old.
+- A `groups` entry per ecosystem folds `minor` + `patch` bumps into one PR (majors stay individual and manual). Without grouping, the default 5-open-PR limit saturates and new updates stop being proposed.
+- `ops-dependabot` merges a grouped PR by its **highest** update type: `ops_dependabot_parse_update_type` picks the maximum `version-update:semver-*` across the footer entries, so a group containing a minor is gated by `allow-minor` even when the rest are patches.
+- PRs touching `.github/workflows/` need the `TOKEN` secret (see above).

@@ -6,6 +6,15 @@ updates:
       - '/actions/*'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
     labels:
       - 'dependencies'
       - 'github_actions'
@@ -16,6 +25,15 @@ updates:
       - '/actions/validate-docs-tree'
     schedule:
       interval: 'weekly'
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
     labels:
       - 'dependencies'
     open-pull-requests-limit: 10

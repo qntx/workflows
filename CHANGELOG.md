@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setup-wasm` skips `wasm-bindgen-cli` when `Cargo.lock` has no `wasm-bindgen` (`lockver.sh` reports `absent`), and checks `dist-export` instead of a hard-coded `./wasm` (#78).
 - `publish-crates` drops inline fmt/clippy/build/test (`cargo publish` verifies the build; CI gates the tag) and adds `dry-run` (#78). Dry-run is one `cargo publish -p <each> --locked --dry-run` call so unpublished path deps resolve, and does not need `CARGO_REGISTRY_TOKEN`.
 - `release.yml` merges the two download steps (`pattern: ''` is falsy in `actions/download-artifact`) (#78).
+- `publish-npm.yml` is OIDC trusted-publishing only: the `route` job and token `publish` job are deleted; one job `publish` keeps check-run `{caller} / publish`. `NPM_TOKEN`, `registry-url`, and `provenance` are removed; publish always passes `--provenance` and asserts npm >= 11.5.1 (default `node-version: '24'` ships it).
+- `publish-pypi.yml` is token-only: the `route` job and OIDC job are deleted; one job `publish`, `PYPI_TOKEN` becomes required, `attestations` is removed. PyPI trusted publishing cannot reach cross-repo reusable workflows (pypi/warehouse#11096).
+- `.github/dependabot.yml`: every ecosystem gains `cooldown: default-days: 7` and a `minor`+`patch` `groups` entry so the open-PR limit stops new updates from being blocked.
 
 ### Fixed
 
@@ -59,7 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ci-rust-cross.yml` (`CI / Rust cross`, jobs `plan` + `build`): required `targets`/`packages`, `features`, `forbid-deps`, per-target toolchain (wasm32 via `clang`/`lld`, android via `cargo-ndk`, iOS plain `cargo build`) (#78).
 - `ci-hermes.yml` (`CI / Hermes`): cached Hermes build pinned by `hermes-commit`, then `bun run <script>` with `HERMES` (#78).
 - `ops-dependabot-enable` input `custom-token` flags that `github-token` is caller-supplied.
-- `fixtures/{rust,bun,wasm,cross,hermes}` workspaces and `self-ci.yml` `e2e-*` jobs exercise the public workflows for real (#77, #78).- `setup-rust` input `toolchain-file` (default false) parses `channel` from `rust-toolchain.toml` or a one-line `rust-toolchain` and passes it to dtolnay. Private composite `actions/setup-wasm` installs that toolchain, `wasm-bindgen-cli` from `Cargo.lock`, and the wasm package contract.
+- `fixtures/{rust,bun,wasm,cross,hermes}` workspaces and `self-ci.yml` `e2e-*` jobs exercise the public workflows for real (#77, #78).
+- `examples/dependabot.yml` consumer template: `bun`, `npm`, `cargo`, `github-actions` with `cooldown: default-days: 7` and `minor`+`patch` groups, weekly.- `setup-rust` input `toolchain-file` (default false) parses `channel` from `rust-toolchain.toml` or a one-line `rust-toolchain` and passes it to dtolnay. Private composite `actions/setup-wasm` installs that toolchain, `wasm-bindgen-cli` from `Cargo.lock`, and the wasm package contract.
 - `ci-docs.yml`: reusable Fumadocs library-tree validator (`docs / ci`). Callers must not set `jobs.docs.name`. Implementation is `$/actions/validate-docs-tree` after checkout and setup-bun. Path jail is TypeScript `resolveDocsRoot`. Local/fan-in CLI: `bun install --frozen-lockfile` in `actions/validate-docs-tree`, then `bun validate-docs-tree.ts <docs-dir> --lint`. Root lockfile is repo-dev only.
 - `ci-wasm.yml` (`CI / WASM`, job id `ci`): wasm32 toolchain, host fmt/clippy/test, `build:wasm`, `test:wasm`, optional `bench:wasm`. Debian runner. `timeout-minutes` default 30.
 - `publish-npm` inputs `wasm` (default false) and `cargo-directory`. Wasm runs `build:wasm` once and `npm publish --ignore-scripts`. Callers set `timeout-minutes` to 30. Default timeout stays 15. Token provenance stays false; OIDC provenance stays true.
