@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-08
+
 ### Fixed
 
 - `publish-npm.yml` gains a `dist-export` input (`./wasm` default, `.` for a dedicated wasm package) forwarded to both `setup-wasm` calls; without it the package contract check hardcoded `./wasm` and a dedicated wasm package could not be published.
