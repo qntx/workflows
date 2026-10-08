@@ -1,5 +1,5 @@
 name: publish-pypi
-description: Build a Python dist and upload with uv publish. Caller job sets token vs OIDC permissions.
+description: Build a Python dist and upload with uv publish. Token only; PYPI_TOKEN required.
 inputs:
   working-directory:
     required: false
@@ -10,9 +10,6 @@ inputs:
   repository-url:
     required: false
     default: ''
-  attestations:
-    required: false
-    default: 'false'
 runs:
   using: composite
   steps:
@@ -39,18 +36,11 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         UV_PUBLISH_TOKEN: ${{ env.PYPI_TOKEN }}
-        ATTESTATIONS: ${{ inputs.attestations }}
         REPOSITORY_URL: ${{ inputs.repository-url }}
       run: |
         set -euo pipefail
         extra=()
-        if [ -z "${UV_PUBLISH_TOKEN:-}" ]; then
-          extra+=(--trusted-publishing always)
-        fi
         if [ -n "${REPOSITORY_URL:-}" ]; then
           extra+=(--publish-url "$REPOSITORY_URL")
-        fi
-        if [ "${ATTESTATIONS}" != "true" ]; then
-          extra+=(--no-attestations)
         fi
         uv publish "${extra[@]}"

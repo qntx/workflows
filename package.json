@@ -3,7 +3,7 @@
   "scripts": {
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules' '#**/node_modules' '#**/target'"
+    "markdownlint": "markdownlint-cli2 '**/*.md' '#node_modules' '#**/node_modules' '#**/target' '#plan'"
   },
   "devDependencies": {
     "markdownlint-cli2": "^0.23.2",

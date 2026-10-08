@@ -1,8 +1,8 @@
 name: Publish / PyPI
 
-# Token and OIDC need different job permissions; GitHub will not let one job
-# request id-token: write when the caller only granted contents: read.
-# jobs.publish = token. jobs.oidc = OIDC. Both set name: publish.
+# Token only. PyPI trusted publishing does not support reusable workflows from
+# another repository (https://github.com/pypi/warehouse/issues/11096), so OIDC
+# cannot succeed from a caller repo. Callers must pass PYPI_TOKEN.
 
 on:
   workflow_call:
@@ -37,19 +37,10 @@ on:
         required: false
         type: string
         default: ''
-      attestations:
-        description: 'OIDC path only. Token path always false.'
-        required: false
-        type: boolean
-        default: true
     secrets:
       PYPI_TOKEN:
-        description: 'Optional. When set, token path is used and attestations are off.'
-        required: false
-    outputs:
-      attestations:
-        description: 'Whether attestations were requested on the OIDC path.'
-        value: ${{ jobs.route.outputs.mode == 'oidc' && inputs.attestations || false }}
+        description: 'PyPI API token.'
+        required: true
 
 permissions:
   contents: read
@@ -59,29 +50,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  route:
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      mode: ${{ steps.r.outputs.mode }}
-    steps:
-      - id: r
-        env:
-          TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -n "${TOKEN}" ]; then
-            echo 'mode=token' >>"$GITHUB_OUTPUT"
-          else
-            echo 'mode=oidc' >>"$GITHUB_OUTPUT"
-          fi
-
   publish:
-    name: publish
-    needs: route
-    if: ${{ needs.route.outputs.mode == 'token' }}
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     environment: ${{ inputs.environment }}
@@ -96,28 +65,5 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           python-version: ${{ inputs.python-version }}
           repository-url: ${{ inputs.repository-url }}
-          attestations: false
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-
-  oidc:
-    name: publish
-    needs: route
-    if: ${{ needs.route.outputs.mode == 'oidc' }}
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: ${{ inputs.timeout-minutes }}
-    environment: ${{ inputs.environment }}
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: $/actions/hardened-checkout
-        with:
-          persist-credentials: false
-      - uses: $/actions/publish-pypi
-        with:
-          working-directory: ${{ inputs.working-directory }}
-          python-version: ${{ inputs.python-version }}
-          repository-url: ${{ inputs.repository-url }}
-          attestations: ${{ inputs.attestations }}

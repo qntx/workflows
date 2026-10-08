@@ -1,5 +1,6 @@
 # Caller owns on:. Pin at @v2.
-# OIDC path (no NPM_TOKEN). Token-only callers drop id-token and pass NPM_TOKEN.
+# OIDC trusted publishing only. The caller job must grant id-token: write and
+# the package needs a Trusted Publisher on npmjs.com for this repo + workflow.
 name: Publish
 
 on:
