@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: '--all-features'
+      packages:
+        description: 'Whitespace-separated package names. When set, clippy, build, test, and doc run once per package with -p (separate invocations prevent Cargo feature unification across workspace members). fmt and deny stay workspace-wide.'
+        required: false
+        type: string
+        default: ''
       apt-packages:
         description: 'Extra apt packages to install (space-separated).'
         required: false
@@ -76,6 +81,7 @@ jobs:
       FEATURES: ${{ inputs.features }}
       DENY: ${{ inputs.deny }}
       DENY_ARGS: ${{ inputs.deny-args }}
+      PACKAGES: ${{ inputs.packages }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
@@ -119,6 +125,14 @@ jobs:
               exit 1
               ;;
           esac
+          # word-split is intentional: whitespace-separated package names
+          # shellcheck disable=SC2086
+          for p in $PACKAGES; do
+            if ! [[ "$p" =~ ^[A-Za-z0-9_-]+$ ]]; then
+              echo "::error::packages entry charset: ${p}"
+              exit 1
+            fi
+          done
 
       - name: Require Linux for cargo-deny
         if: ${{ inputs.deny }}
@@ -149,21 +163,39 @@ jobs:
           set -euo pipefail
           # word-split is intentional
           # shellcheck disable=SC2086
-          cargo clippy --workspace --all-targets $FEATURES -- -D warnings
+          if [ -z "$PACKAGES" ]; then
+            cargo clippy --workspace --all-targets $FEATURES -- -D warnings
+          else
+            for p in $PACKAGES; do
+              cargo clippy -p "$p" --all-targets $FEATURES -- -D warnings
+            done
+          fi
 
       - name: Build
         run: |
           set -euo pipefail
           # word-split is intentional
           # shellcheck disable=SC2086
-          cargo build --workspace --verbose $FEATURES
+          if [ -z "$PACKAGES" ]; then
+            cargo build --workspace --verbose $FEATURES
+          else
+            for p in $PACKAGES; do
+              cargo build -p "$p" --verbose $FEATURES
+            done
+          fi
 
       - name: Test
         run: |
           set -euo pipefail
           # word-split is intentional
           # shellcheck disable=SC2086
-          cargo test --workspace --verbose $FEATURES
+          if [ -z "$PACKAGES" ]; then
+            cargo test --workspace --verbose $FEATURES
+          else
+            for p in $PACKAGES; do
+              cargo test -p "$p" --verbose $FEATURES
+            done
+          fi
 
       - name: Doc
         if: ${{ inputs.doc }}
@@ -173,7 +205,13 @@ jobs:
           set -euo pipefail
           # word-split is intentional
           # shellcheck disable=SC2086
-          cargo doc --workspace --no-deps $FEATURES
+          if [ -z "$PACKAGES" ]; then
+            cargo doc --workspace --no-deps $FEATURES
+          else
+            for p in $PACKAGES; do
+              cargo doc -p "$p" --no-deps $FEATURES
+            done
+          fi
 
       - name: Package check
         if: ${{ inputs.package-check }}

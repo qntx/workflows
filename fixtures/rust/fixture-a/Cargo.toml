@@ -8,5 +8,5 @@ description = "qntx/workflows e2e fixture crate A"
 publish = true
 
 [features]
-default = []
+default = ["extra"]
 extra = []

@@ -178,6 +178,16 @@ jobs:
       doc: true
       package-check: true
 
+  e2e-rust-packages:
+    uses: $/.github/workflows/ci-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust
+      features: --no-default-features
+      packages: fixture-a fixture-b
+      doc: true
+
   e2e-bun:
     uses: $/.github/workflows/ci-bun.yml
     permissions:
@@ -196,6 +206,19 @@ jobs:
       rust-checks: false
       dist-export: .
       scripts: test:extra
+
+  e2e-wasm-scripts-dir:
+    uses: $/.github/workflows/ci-wasm.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/wasm
+      install-directory: fixtures/wasm
+      cargo-directory: fixtures/wasm
+      rust-checks: false
+      dist-export: .
+      scripts: e2e:scripts-dir
+      scripts-directory: fixtures/wasm/scripts
 
   e2e-cross:
     uses: $/.github/workflows/ci-rust-cross.yml
@@ -291,8 +314,10 @@ jobs:
         docs,
         e2e-rust,
         e2e-rust-minimal,
+        e2e-rust-packages,
         e2e-bun,
         e2e-wasm,
+        e2e-wasm-scripts-dir,
         e2e-cross,
         e2e-publish-crates,
         e2e-publish-npm,
@@ -315,8 +340,10 @@ jobs:
           || needs.docs.result != 'success'
           || needs.e2e-rust.result != 'success'
           || needs.e2e-rust-minimal.result != 'success'
+          || needs.e2e-rust-packages.result != 'success'
           || needs.e2e-bun.result != 'success'
           || needs.e2e-wasm.result != 'success'
+          || needs.e2e-wasm-scripts-dir.result != 'success'
           || needs.e2e-cross.result != 'success'
           || needs.e2e-publish-crates.result != 'success'
           || needs.e2e-publish-npm.result != 'success'

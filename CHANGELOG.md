@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ci-wasm.yml` input `scripts-directory`: the Extra scripts step runs there instead of `working-directory` when set.
+- `ci-rust.yml` input `packages`: when set, clippy, build, test, and doc run once per package with `-p <pkg>` — separate invocations prevent Cargo feature unification across workspace members. `fmt` and `deny` stay workspace-wide.
+- Self-CI e2e coverage for both inputs: `e2e-wasm-scripts-dir` (marker-proving scripts fixture under `fixtures/wasm/scripts`) and `e2e-rust-packages` (`fixtures/rust` minimal-mode test that workspace-wide `--no-default-features` would silently mask).
+
 ## [2.5.1] - 2026-10-08
 
 ### Changed

@@ -63,6 +63,11 @@ on:
         required: false
         type: string
         default: ''
+      scripts-directory:
+        description: 'Directory for the Extra scripts step. Empty runs them in working-directory. Relative to the repository root.'
+        required: false
+        type: string
+        default: ''
       dist-export:
         description: 'Package exports key for the wasm dist check.'
         required: false
@@ -178,7 +183,7 @@ jobs:
 
       - name: Extra scripts
         if: ${{ inputs.scripts != '' }}
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs.scripts-directory != '' && inputs.scripts-directory || inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
           SCRIPTS: ${{ inputs.scripts }}
