@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependency refresh: `dtolnay/rust-toolchain` pin, `zizmor` 1.29.0 → 1.30.1, `pinact` 4.1.1 → 5.0.0 (CLI now rejects single-dash long flags; all call sites already use `--`), `prettier` ^3.9.9, `markdownlint-cli2` 0.23.3, `js-yaml` 5.4.2, `typescript` 7.0.2 (tsgo) in `actions/validate-docs-tree` and `fixtures/bun`.
+
 ## [2.5.0] - 2026-10-08
 
 ### Fixed
