@@ -177,7 +177,7 @@ jobs:
 
 ## Publish / npm
 
-OIDC trusted publishing only; `npm publish` always runs with `--provenance`:
+OIDC trusted publishing only; `npm publish` always runs with `--provenance`. A version that is already on the registry is skipped with a notice, so reruns after a partial release and a first version published by hand (npm only allows configuring a Trusted Publisher for an existing package) stay green:
 
 ```yaml
 permissions:
