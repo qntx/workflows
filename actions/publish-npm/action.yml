@@ -161,10 +161,32 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
-        echo "package=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
-        echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+        name="$(jq -r .name package.json)"
+        version="$(jq -r .version package.json)"
+        echo "package=${name}" >> "$GITHUB_OUTPUT"
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+        # A rerun after a partial release, or a version published by hand
+        # (a new package needs one manual publish before trusted publishing
+        # can be configured), must not fail on the existing version.
+        if out="$(npm view "${name}@${version}" version 2>&1)"; then
+          exists=false
+          [ "$out" = "$version" ] && exists=true
+        else
+          case "$out" in
+            *E404*) exists=false ;;
+            *)
+              echo "::error::npm view ${name}@${version} failed: ${out}"
+              exit 1
+              ;;
+          esac
+        fi
+        echo "exists=${exists}" >> "$GITHUB_OUTPUT"
+        if [ "$exists" = true ]; then
+          echo "::notice::${name}@${version} is already on the registry; skipping publish"
+        fi
 
     - name: Publish
+      if: steps.pkg.outputs.exists != 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
