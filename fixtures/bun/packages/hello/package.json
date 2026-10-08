@@ -1,0 +1,11 @@
+{
+  "name": "fixture-hello",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build index.ts --outdir dist",
+    "test": "bun test"
+  }
+}

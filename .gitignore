@@ -26,6 +26,6 @@ vite.config.ts.timestamp-*
 /plan/
 
 # Fixtures build output
-/fixtures/*/target/
-/fixtures/*/node_modules/
-/fixtures/*/dist/
+/fixtures/**/target/
+/fixtures/**/node_modules/
+/fixtures/**/dist/

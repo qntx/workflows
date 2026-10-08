@@ -25,10 +25,11 @@ fi
 
 export_key="${DIST_EXPORT:-./wasm}"
 case "$export_key" in
+  .) ;;
   ./) die 'dist-export is empty' ;;
   ./*[!A-Za-z0-9._/-]* | ./*/) die 'dist-export charset' ;;
   ./*) ;;
-  *) die 'dist-export must start with ./' ;;
+  *) die 'dist-export must be . or start with ./' ;;
 esac
 
 # `.import` on a string export is a jq error, not null, so branch on type first.

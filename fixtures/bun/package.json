@@ -1,12 +1,15 @@
 {
-  "name": "fixture-bun",
+  "name": "fixture-bun-workspace",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "lint": "prettier --check .",
-    "typecheck": "tsc --noEmit",
-    "build": "bun build index.ts --outdir dist",
-    "test": "bun test"
+    "typecheck": "bun run --filter '*' typecheck",
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test"
   },
   "devDependencies": {
     "bun-types": "1.4.2",

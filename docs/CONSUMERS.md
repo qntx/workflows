@@ -48,6 +48,8 @@ Language CI is `.github/workflows/ci.yml` (job id `ci`). Docs CI is `.github/wor
 
 `ci-go.yml` `golangci-lint-version` must be `v2.N`, `v2.N.M`, or `latest`. Do not pass `v2`.
 
+`ci-bun.yml` Test runs `bun run test` when `scripts.test` is defined; otherwise it falls back to a three-level file heuristic plus `bun test`. The heuristic cannot see monorepo tests (`packages/*/tests/*`) and would silently run a different runner than a declared `test` script, so declare `test` explicitly.
+
 `ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`. Pin `@v2`. Copy `examples/ci-docs.yml`.
 
 ```yaml
@@ -109,7 +111,9 @@ Rust-free CI stays `ci-bun.yml`. Wasm CI is a sibling job. Caller job id `wasm`.
 
 `timeout-minutes` may be omitted (default 30). `bun-version` may be omitted (default `1.4`, not `latest`, not `1.4.0`). `package-manager` is `bun` or `npm`. Copy `examples/ci-wasm.yml`.
 
-Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-directory` (`.`), `install-directory` (`.`), `cargo-directory` (`.`), `submodules` (`false`), `package-manager` (`bun`), `bun-version` (`1.4`), `node-version` (`24`, not installed on the bun path), `bench` (`false`), `rust-checks` (`true`; set `false` when a sibling `ci-rust` job already runs fmt/clippy/test), `scripts` (`''`; whitespace-separated extra package scripts run after `test:wasm`/`bench:wasm`), `dist-export` (`./wasm`), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`).
+Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-directory` (`.`), `install-directory` (`.`), `cargo-directory` (`.`), `submodules` (`false`), `package-manager` (`bun`), `bun-version` (`1.4`), `node-version` (`24`, not installed on the bun path), `bench` (`false`), `rust-checks` (`true`; set `false` when a sibling `ci-rust` job already runs fmt/clippy/test), `scripts` (`''`; whitespace-separated extra package scripts run after `test:wasm`/`bench:wasm`), `dist-export` (`./wasm`; `.` selects the root export of a dedicated wasm package), `targets` (`wasm32-unknown-unknown`), `apt-packages` (`clang lld llvm`).
+
+`setup-wasm` package contract: `files` is an array containing `dist` (other entries must be `dist/` paths or top-level license/readme/changelog files); `sideEffects` contains `**/*.wasm`; `scripts.build:wasm` and `scripts.test:wasm` exist; `install`/`postinstall`/`prepublish` scripts are forbidden; `devEngines.packageManager`, when present, must name the same package manager with `onFail: ignore`. The `dist-export` exports key must resolve to a file under `dist/` and at least one `dist/*.wasm` must exist. `prepublishOnly` is not part of the contract — `publish-npm.yml` builds wasm itself and publishes with `--ignore-scripts`.
 
 ### ci-rust-cross
 

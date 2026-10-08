@@ -17,8 +17,7 @@ fi
 
 pm="${PM:-}"
 case "$pm" in
-  bun) pre='bun run build:wasm' ;;
-  npm) pre='npm run build:wasm' ;;
+  bun | npm) ;;
   *) die 'package-manager must be bun or npm' ;;
 esac
 
@@ -54,25 +53,25 @@ if [ "$(jq -r 'any(.sideEffects[]; . == "**/*.wasm")' "$pkg")" != true ]; then
   die 'sideEffects must contain **/*.wasm'
 fi
 
-if [ "$(jq -r '.exports["."].import | type' "$pkg")" != string ]; then
-  die 'exports["."].import is missing'
-fi
-root_import="$(jq -r '.exports["."].import' "$pkg")"
-case "$root_import" in
-  *wasm*) die 'exports["."].import must not contain wasm' ;;
-esac
-
 dist_export="${DIST_EXPORT:-./wasm}"
 case "$dist_export" in
+  .) ;;
   ./) die 'dist-export is empty' ;;
   ./*[!A-Za-z0-9._/-]* | ./*/) die 'dist-export charset' ;;
   ./*) ;;
-  *) die 'dist-export must start with ./' ;;
+  *) die 'dist-export must be . or start with ./' ;;
 esac
-if [ "$(jq -r --arg e "$dist_export" '.exports[$e].import | type' "$pkg")" != string ]; then
-  die "exports[\"${dist_export}\"].import is missing"
-fi
-if [ -z "$(jq -r --arg e "$dist_export" '.exports[$e].import' "$pkg")" ]; then
+
+# `.import` on a string export is a jq error, not null, so branch on type first.
+wasm_import="$(jq -r --arg e "$dist_export" '
+  .exports[$e] as $w
+  | if $w == null then ""
+    elif ($w | type) == "string" then $w
+    elif ($w | type) == "object" and ($w.import | type) == "string" then $w.import
+    else ""
+    end
+' "$pkg")"
+if [ -z "$wasm_import" ]; then
   die "exports[\"${dist_export}\"].import is missing"
 fi
 
@@ -86,19 +85,8 @@ need_script() {
   fi
 }
 
-need_script build
-build="$(jq -r '.scripts.build' "$pkg")"
-case "$build" in
-  *build:wasm* | *WASM_PACK*) die 'scripts.build must not run the wasm build' ;;
-esac
-
 need_script 'build:wasm'
 need_script 'test:wasm'
-
-got_pre="$(jq -r '.scripts.prepublishOnly' "$pkg")"
-if [ "$(jq -r '.scripts.prepublishOnly | type' "$pkg")" != string ] || [ "$got_pre" != "$pre" ]; then
-  die "scripts.prepublishOnly must be exactly ${pre}"
-fi
 
 for key in install postinstall prepublish; do
   if [ "$(jq -r --arg k "$key" '.scripts | has($k)' "$pkg")" = true ]; then

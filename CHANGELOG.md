@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `ci-bun.yml` Test runs `bun run test` when `scripts.test` is defined; the file heuristic + `bun test` is only the fallback. The heuristic cannot see monorepo tests (`packages/*/tests/*`) and could run a different runner than the declared script.
+- `setup-wasm` package contract drops the single-package `./wasm` layout rules (`exports["."]` must not be wasm, `scripts.build` must not run the wasm build, `prepublishOnly` must equal `<pm> run build:wasm`). `dist-export` accepts `.` for a dedicated wasm package whose root export is the loader. Kept: `files` containing `dist` (with the allowed-entries rule), `sideEffects` `**/*.wasm`, `build:wasm`/`test:wasm` scripts, no `install`/`postinstall`/`prepublish`, `devEngines.packageManager` consistency, dist-export resolving under `dist/` with at least one `dist/*.wasm`.
+- `fixtures/bun` is a Bun workspace (`packages/hello`) so `e2e-bun` exercises the `bun run test` script path in a monorepo. `fixtures/wasm` is now the dedicated-package shape (root export is the wasm loader) with `e2e-wasm` `dist-export: .`.
+
 ## [2.2.0] - 2026-10-08
 
 ### Changed

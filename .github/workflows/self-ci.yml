@@ -194,6 +194,7 @@ jobs:
       install-directory: fixtures/wasm
       cargo-directory: fixtures/wasm
       rust-checks: false
+      dist-export: .
       scripts: test:extra
 
   e2e-cross:
