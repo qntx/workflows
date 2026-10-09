@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ci-rust.yml` input `each-feature` (default `false`): after Test, `cargo hack check --each-feature --no-dev-deps` runs once per `packages` entry with `-p <pkg>`, or with `--workspace` when `packages` is empty — proving every feature compiles alone. cargo-hack installs with `cargo install --locked` at a pinned version.
+- `ci-rust.yml` and `ci-rust-cross.yml` `features` accepts a fourth form, `--no-default-features --features <list>` (the three existing forms are unchanged).
+- Self-CI e2e coverage: `e2e-rust-each-feature` (new `fixtures/rust` member `fixture-c` with two independent non-default features, run with `features: '--no-default-features --features alpha,beta'` + `each-feature: true` + `packages: fixture-c`) and `e2e-cross-features` (`fixture-cross` built for `wasm32-unknown-unknown` with `features: '--no-default-features --features itoa'`).
+
 ## [2.7.0] - 2026-10-09
 
 ### Added

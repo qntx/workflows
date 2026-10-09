@@ -12,3 +12,7 @@ version = "0.1.0"
 dependencies = [
  "fixture-a",
 ]
+
+[[package]]
+name = "fixture-c"
+version = "0.1.0"

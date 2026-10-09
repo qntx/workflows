@@ -29,7 +29,7 @@ on:
         type: string
         default: ''
       features:
-        description: 'Cargo feature flags: --all-features, --no-default-features, or --features <list>.'
+        description: 'Cargo feature flags: --all-features, --no-default-features, --features <list>, or --no-default-features --features <list>.'
         required: false
         type: string
         default: '--all-features'
@@ -63,6 +63,11 @@ on:
         required: false
         type: boolean
         default: false
+      each-feature:
+        description: 'Run cargo hack check --each-feature --no-dev-deps once per packages entry (-p <pkg>), or with --workspace when packages is empty, after Test.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,6 +83,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     env:
       CARGO_TERM_COLOR: always
+      # cargo-hack 0.6.45 (released 2026-05-30): newest release when pinned.
+      CARGO_HACK_VERSION: '0.6.45'
       FEATURES: ${{ inputs.features }}
       DENY: ${{ inputs.deny }}
       DENY_ARGS: ${{ inputs.deny-args }}
@@ -111,20 +118,24 @@ jobs:
       - name: Check feature flags
         run: |
           set -euo pipefail
+          rest=''
           case "$FEATURES" in
             --all-features | --no-default-features) ;;
             --features\ *)
               rest="${FEATURES#--features }"
-              if ! [[ "$rest" =~ ^[A-Za-z0-9_,-]+$ ]]; then
-                echo '::error::features list must match [A-Za-z0-9_,-]+'
-                exit 1
-              fi
+              ;;
+            --no-default-features\ --features\ *)
+              rest="${FEATURES#--no-default-features --features }"
               ;;
             *)
-              echo '::error::features must be --all-features, --no-default-features, or --features <list>'
+              echo '::error::features must be --all-features, --no-default-features, --features <list>, or --no-default-features --features <list>'
               exit 1
               ;;
           esac
+          if [ -n "$rest" ] && ! [[ "$rest" =~ ^[A-Za-z0-9_,-]+$ ]]; then
+            echo '::error::features list must match [A-Za-z0-9_,-]+'
+            exit 1
+          fi
           # word-split is intentional: whitespace-separated package names
           # shellcheck disable=SC2086
           for p in $PACKAGES; do
@@ -194,6 +205,26 @@ jobs:
           else
             for p in $PACKAGES; do
               cargo test -p "$p" --verbose $FEATURES
+            done
+          fi
+
+      - name: Install cargo-hack
+        if: ${{ inputs.each-feature }}
+        run: |
+          set -euo pipefail
+          cargo install cargo-hack --locked --version "$CARGO_HACK_VERSION"
+
+      - name: Each feature
+        if: ${{ inputs.each-feature }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional: whitespace-separated package names
+          # shellcheck disable=SC2086
+          if [ -z "$PACKAGES" ]; then
+            cargo hack check --each-feature --no-dev-deps --workspace
+          else
+            for p in $PACKAGES; do
+              cargo hack check --each-feature --no-dev-deps -p "$p"
             done
           fi
 

@@ -24,3 +24,5 @@ jobs:
       # packages: my-crate other-crate   # per-package -p runs; no feature unification across members
       # doc: true    # cargo doc --workspace --no-deps with RUSTDOCFLAGS=-D warnings
       # package-check: true   # cargo publish --workspace --dry-run --locked
+      # each-feature: true   # cargo hack check --each-feature --no-dev-deps per package (or --workspace)
+      # features: '--no-default-features --features a,b'   # also: --all-features, --no-default-features, --features a,b

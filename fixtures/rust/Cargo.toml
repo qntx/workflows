@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["fixture-a", "fixture-b"]
+members = ["fixture-a", "fixture-b", "fixture-c"]
 
 [workspace.package]
 edition = "2021"

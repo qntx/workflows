@@ -237,6 +237,16 @@ jobs:
       scripts: e2e:scripts-dir
       scripts-directory: fixtures/wasm/scripts
 
+  e2e-rust-each-feature:
+    uses: $/.github/workflows/ci-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust
+      features: --no-default-features --features alpha,beta
+      each-feature: true
+      packages: fixture-c
+
   e2e-cross:
     uses: $/.github/workflows/ci-rust-cross.yml
     permissions:
@@ -246,6 +256,16 @@ jobs:
       targets: wasm32-unknown-unknown aarch64-linux-android x86_64-linux-android aarch64-apple-ios aarch64-apple-ios-sim
       packages: fixture-cross
       forbid-deps: itoa
+
+  e2e-cross-features:
+    uses: $/.github/workflows/ci-rust-cross.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cross
+      targets: wasm32-unknown-unknown
+      packages: fixture-cross
+      features: --no-default-features --features itoa
 
   e2e-publish-crates:
     uses: $/.github/workflows/publish-crates.yml
@@ -332,12 +352,14 @@ jobs:
         e2e-rust,
         e2e-rust-minimal,
         e2e-rust-packages,
+        e2e-rust-each-feature,
         e2e-bun,
         e2e-bun-rust,
         e2e-fuzz,
         e2e-wasm,
         e2e-wasm-scripts-dir,
         e2e-cross,
+        e2e-cross-features,
         e2e-publish-crates,
         e2e-publish-npm,
         e2e-publish-npm-wasm,
@@ -360,12 +382,14 @@ jobs:
           || needs.e2e-rust.result != 'success'
           || needs.e2e-rust-minimal.result != 'success'
           || needs.e2e-rust-packages.result != 'success'
+          || needs.e2e-rust-each-feature.result != 'success'
           || needs.e2e-bun.result != 'success'
           || needs.e2e-bun-rust.result != 'success'
           || needs.e2e-fuzz.result != 'success'
           || needs.e2e-wasm.result != 'success'
           || needs.e2e-wasm-scripts-dir.result != 'success'
           || needs.e2e-cross.result != 'success'
+          || needs.e2e-cross-features.result != 'success'
           || needs.e2e-publish-crates.result != 'success'
           || needs.e2e-publish-npm.result != 'success'
           || needs.e2e-publish-npm-wasm.result != 'success'

@@ -27,7 +27,7 @@ jobs:
 
 Do not pass `github.event.*` (issue titles, PR bodies, review comments) into `*-command` inputs. Those run via `bash -c` as the trusted caller.
 
-`ci-rust.yml` `deny: true` requires a Linux runner (cargo-deny-action is Docker). `features` must be `--all-features`, `--no-default-features`, or `--features <list>`. `rust-version` default `''` honours `<working-directory>/rust-toolchain.toml` or `rust-toolchain`, else `stable`; a non-empty value wins over the file. `doc: true` adds `cargo doc --workspace --no-deps` under `RUSTDOCFLAGS="-D warnings"`; `package-check: true` adds `cargo publish --workspace --dry-run --locked`. `packages` (whitespace-separated names) makes clippy, build, test, and doc run once per package with `-p <pkg>` instead of once with `--workspace`; separate invocations prevent Cargo feature unification across workspace members from masking minimal-configuration breakage. `fmt` and `deny` stay workspace-wide.
+`ci-rust.yml` `deny: true` requires a Linux runner (cargo-deny-action is Docker). `features` must be `--all-features`, `--no-default-features`, `--features <list>`, or `--no-default-features --features <list>`. `rust-version` default `''` honours `<working-directory>/rust-toolchain.toml` or `rust-toolchain`, else `stable`; a non-empty value wins over the file. `doc: true` adds `cargo doc --workspace --no-deps` under `RUSTDOCFLAGS="-D warnings"`; `package-check: true` adds `cargo publish --workspace --dry-run --locked`. `each-feature: true` adds a `cargo hack check --each-feature --no-dev-deps` pass after Test — once per `packages` entry with `-p <pkg>`, or `--workspace` when `packages` is empty — proving every feature compiles alone. `packages` (whitespace-separated names) makes clippy, build, test, and doc run once per package with `-p <pkg>` instead of once with `--workspace`; separate invocations prevent Cargo feature unification across workspace members from masking minimal-configuration breakage. `fmt` and `deny` stay workspace-wide.
 
 `astral-sh/setup-uv` is pinned at v10. This repository sets `enable-cache: true` or `false` explicitly. Do not use `auto`: v10 turns cache off on tag push, `release`, `pull_request_target`, and `workflow_run`.
 
@@ -119,7 +119,7 @@ Inputs: `runs-on` (`ubuntu-latest`), `timeout-minutes` (`30`), `working-director
 
 ### ci-rust-cross
 
-Cross-target `cargo build` matrix for `targets` (required, whitespace-separated triples) and `packages` (required, whitespace-separated names). `*-apple-ios*` runs on `macos-latest`; android targets run via `cargo-ndk` on `ubuntu-latest` (uses the runner's `ANDROID_NDK_LATEST_HOME`); everything else on `ubuntu-latest`. `features` defaults `--no-default-features`. `forbid-deps` lists crate names that must not appear in `cargo tree -e normal` for any package/target.
+Cross-target `cargo build` matrix for `targets` (required, whitespace-separated triples) and `packages` (required, whitespace-separated names). `*-apple-ios*` runs on `macos-latest`; android targets run via `cargo-ndk` on `ubuntu-latest` (uses the runner's `ANDROID_NDK_LATEST_HOME`); everything else on `ubuntu-latest`. `features` defaults `--no-default-features` and accepts the same four forms as `ci-rust.yml` (`--all-features`, `--no-default-features`, `--features <list>`, `--no-default-features --features <list>`). `forbid-deps` lists crate names that must not appear in `cargo tree -e normal` for any package/target.
 
 ```yaml
 jobs:
