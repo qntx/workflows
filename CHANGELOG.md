@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-10-09
+
+### Added
+
+- `ci-rust-fuzz.yml` (`CI / Rust fuzz`): a `plan` job resolves cargo-fuzz targets (the `targets` input, or every `fuzz_targets/*.rs` stem) and a `fuzz` matrix job runs each target time-boxed on nightly with a pinned cargo-fuzz (`cargo-fuzz-version`, default `0.13.2`), seeded from the committed corpus. Crash artifacts upload on failure; corpus growth is never uploaded. Inputs: `fuzz-directory`, `targets`, `max-total-time`, `timeout`, `rss-limit-mb`, `rust-version` (nightly only), `cargo-fuzz-version`, `apt-packages`.
+- `ci-bun.yml` inputs `rust` (install the toolchain from the working-directory `rust-toolchain.toml` before dependencies), `scripts`, and `scripts-directory` (package scripts run with `bun run` after Test, same contract as `ci-wasm.yml`). Defaults leave existing callers unchanged.
+- Self-CI e2e coverage: `e2e-fuzz` (`fixtures/fuzz`) and `e2e-bun-rust` (`fixtures/bun` with a tiny cargo crate driven by a package script).
+
 ## [2.6.0] - 2026-10-08
 
 ### Added
