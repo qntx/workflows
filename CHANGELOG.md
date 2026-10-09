@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-10-09
+
 ### Added
 
 - `ci-rust.yml` input `each-feature` (default `false`): after Test, `cargo hack check --each-feature --no-dev-deps` runs once per `packages` entry with `-p <pkg>`, or with `--workspace` when `packages` is empty — proving every feature compiles alone. cargo-hack installs with `cargo install --locked` at a pinned version.
