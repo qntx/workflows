@@ -33,6 +33,21 @@ on:
         required: false
         type: string
         default: 'bun install --frozen-lockfile'
+      rust:
+        description: 'Install the Rust toolchain before dependencies. Honours the working-directory rust-toolchain file, else stable. For repo scripts that drive cargo (cross-language differential tests).'
+        required: false
+        type: boolean
+        default: false
+      scripts:
+        description: 'Whitespace-separated package script names run with bun run in order after Test.'
+        required: false
+        type: string
+        default: ''
+      scripts-directory:
+        description: 'Directory for the Extra scripts step. Empty runs them in working-directory. Relative to the repository root.'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -52,16 +67,29 @@ jobs:
           persist-credentials: false
           submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
+      - name: Set up Rust
+        if: ${{ inputs.rust }}
+        uses: $/actions/setup-rust
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          components: ''
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ inputs.bun-version }}
 
       - name: Record toolchain
+        env:
+          RUST: ${{ inputs.rust }}
         run: |
           set -euo pipefail
           {
             echo '## CI / Bun'
             echo "- bun: $(bun --version)"
+            if [ "$RUST" = 'true' ]; then
+              echo "- rustc: $(rustc --version)"
+              echo "- cargo: $(cargo --version)"
+            fi
           } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Install dependencies
@@ -116,3 +144,20 @@ jobs:
             echo 'No tests found, skipping.'
             echo '- skipped: test' >>"$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Extra scripts
+        if: ${{ inputs.scripts != '' }}
+        working-directory: ${{ inputs.scripts-directory != '' && inputs.scripts-directory || inputs.working-directory }}
+        env:
+          SCRIPTS: ${{ inputs.scripts }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional: whitespace-separated script names
+          # shellcheck disable=SC2086
+          for s in $SCRIPTS; do
+            if ! [[ "$s" =~ ^[A-Za-z0-9:_.-]+$ ]]; then
+              echo "::error::scripts entry charset: ${s}"
+              exit 1
+            fi
+            bun run "$s"
+          done

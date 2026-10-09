@@ -9,7 +9,8 @@
     "lint": "prettier --check .",
     "typecheck": "bun run --filter '*' typecheck",
     "build": "bun run --filter '*' build",
-    "test": "bun run --filter '*' test"
+    "test": "bun run --filter '*' test",
+    "test:rust": "cargo test --manifest-path crates/tiny/Cargo.toml"
   },
   "devDependencies": {
     "bun-types": "1.4.2",

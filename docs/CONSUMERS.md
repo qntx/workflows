@@ -50,6 +50,8 @@ Language CI is `.github/workflows/ci.yml` (job id `ci`). Docs CI is `.github/wor
 
 `ci-bun.yml` Test runs `bun run test` when `scripts.test` is defined; otherwise it falls back to a three-level file heuristic plus `bun test`. The heuristic cannot see monorepo tests (`packages/*/tests/*`) and would silently run a different runner than a declared `test` script, so declare `test` explicitly.
 
+`ci-bun.yml` extra inputs for repos whose scripts drive cargo as well as bun (cross-language differential tests): `rust` (`false`; installs the toolchain via `setup-rust`, honouring `<working-directory>/rust-toolchain.toml` else `stable`, before dependency install), `scripts` (`''`; whitespace-separated package script names run with `bun run` in order after Test), `scripts-directory` (`''`; falls back to `working-directory`).
+
 `ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`. Pin `@v2`. Copy `examples/ci-docs.yml`.
 
 ```yaml
@@ -129,6 +131,24 @@ jobs:
       targets: wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
       packages: my-crate
       forbid-deps: tokio
+```
+
+### ci-rust-fuzz
+
+Time-boxed cargo-fuzz matrix, `fail-fast: false`, one job per target. `working-directory` is the crate that owns the fuzz project; `fuzz-directory` (default `fuzz`) points inside it and is jailed to the workspace. `targets` empty runs every `fuzz_targets/*.rs` stem. Check-run is `<caller-job> / <target>`.
+
+`rust-version` accepts `nightly` or `nightly-YYYY-MM-DD` only (cargo-fuzz needs unstable flags; default `nightly`). `cargo-fuzz-version` is a pinned `cargo install --locked` release (default `0.13.2`). libFuzzer flags per target: `max-total-time` (default 60s), `timeout` (default 5s), `rss-limit-mb` (default 2048). `apt-packages` defaults empty — current cargo-fuzz links libFuzzer with the toolchain's bundled runtime; set `clang` only for crates whose build needs it.
+
+The committed `fuzz/corpus/` seeds each run; corpus growth is not committed or uploaded. On failure, `<fuzz-directory>/artifacts/<target>/` uploads as `fuzz-artifacts-<target>` for 7 days.
+
+```yaml
+jobs:
+  fuzz:
+    uses: qntx/workflows/.github/workflows/ci-rust-fuzz.yml@v2
+    permissions:
+      contents: read
+    with:
+      max-total-time: 300
 ```
 
 ### ci-hermes

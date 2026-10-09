@@ -1,0 +1,8 @@
+[package]
+name = "fixture-bun-tiny"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/qntx/workflows"
+description = "qntx/workflows e2e fixture crate for the ci-bun rust path"
+publish = false
