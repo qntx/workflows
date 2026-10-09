@@ -17,4 +17,5 @@ jobs:
     with:
       targets: wasm32-unknown-unknown aarch64-apple-ios aarch64-linux-android
       packages: my-crate
+      # features: '--no-default-features --features a,b'   # also: --all-features, --no-default-features, --features a,b
       # forbid-deps: tokio   # crate names banned from cargo tree -e normal
