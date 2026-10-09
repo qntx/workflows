@@ -195,6 +195,23 @@ jobs:
     with:
       working-directory: fixtures/bun
 
+  e2e-bun-rust:
+    uses: $/.github/workflows/ci-bun.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/bun
+      rust: true
+      scripts: test:rust
+
+  e2e-fuzz:
+    uses: $/.github/workflows/ci-rust-fuzz.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/fuzz
+      max-total-time: 10
+
   e2e-wasm:
     uses: $/.github/workflows/ci-wasm.yml
     permissions:
@@ -316,6 +333,8 @@ jobs:
         e2e-rust-minimal,
         e2e-rust-packages,
         e2e-bun,
+        e2e-bun-rust,
+        e2e-fuzz,
         e2e-wasm,
         e2e-wasm-scripts-dir,
         e2e-cross,
@@ -342,6 +361,8 @@ jobs:
           || needs.e2e-rust-minimal.result != 'success'
           || needs.e2e-rust-packages.result != 'success'
           || needs.e2e-bun.result != 'success'
+          || needs.e2e-bun-rust.result != 'success'
+          || needs.e2e-fuzz.result != 'success'
           || needs.e2e-wasm.result != 'success'
           || needs.e2e-wasm-scripts-dir.result != 'success'
           || needs.e2e-cross.result != 'success'

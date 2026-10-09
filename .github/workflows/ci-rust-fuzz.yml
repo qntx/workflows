@@ -1,0 +1,233 @@
+name: CI / Rust fuzz
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner label. Debian-like required (apt).'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Directory of the crate being fuzzed, relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
+      submodules:
+        description: 'Checkout git submodules recursively when true.'
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        required: false
+        type: number
+        default: 30
+      fuzz-directory:
+        description: 'cargo-fuzz project directory relative to working-directory. Jailed inside the workspace.'
+        required: false
+        type: string
+        default: 'fuzz'
+      targets:
+        description: 'Whitespace-separated fuzz target names. Empty runs every fuzz_targets/*.rs stem.'
+        required: false
+        type: string
+        default: ''
+      max-total-time:
+        description: 'libFuzzer -max_total_time in seconds, per target.'
+        required: false
+        type: number
+        default: 60
+      timeout:
+        description: 'libFuzzer -timeout in seconds, per individual input.'
+        required: false
+        type: number
+        default: 5
+      rss-limit-mb:
+        description: 'libFuzzer -rss_limit_mb per target.'
+        required: false
+        type: number
+        default: 2048
+      rust-version:
+        description: 'Nightly toolchain (cargo-fuzz needs unstable flags): nightly or nightly-YYYY-MM-DD.'
+        required: false
+        type: string
+        default: 'nightly'
+      cargo-fuzz-version:
+        description: 'cargo-fuzz release installed with cargo install --locked.'
+        required: false
+        type: string
+        default: '0.13.2'
+      apt-packages:
+        description: 'Extra apt packages for crates with C/C++ dependencies (e.g. clang). Empty = none.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - id: plan
+        env:
+          WORK_DIR: ${{ inputs.working-directory }}
+          FUZZ_DIR: ${{ inputs.fuzz-directory }}
+          TARGETS: ${{ inputs.targets }}
+          RUST_VERSION: ${{ inputs.rust-version }}
+          CARGO_FUZZ_VERSION: ${{ inputs.cargo-fuzz-version }}
+          MAX_TOTAL_TIME: ${{ inputs.max-total-time }}
+          TIMEOUT: ${{ inputs.timeout }}
+          RSS_LIMIT_MB: ${{ inputs.rss-limit-mb }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$RUST_VERSION" =~ ^nightly(-[0-9]{4}-[0-9]{2}-[0-9]{2})?$ ]]; then
+            echo '::error::rust-version must be nightly or nightly-YYYY-MM-DD'
+            exit 1
+          fi
+          if ! [[ "$CARGO_FUZZ_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::cargo-fuzz-version must be an exact x.y.z release'
+            exit 1
+          fi
+          for n in "$MAX_TOTAL_TIME" "$TIMEOUT" "$RSS_LIMIT_MB"; do
+            if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ]; then
+              echo "::error::max-total-time, timeout, rss-limit-mb must be positive integers: ${n}"
+              exit 1
+            fi
+          done
+          for d in "$WORK_DIR" "$FUZZ_DIR"; do
+            if ! [[ "$d" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::error::directory charset: ${d}"
+              exit 1
+            fi
+          done
+          root="$(realpath "$GITHUB_WORKSPACE")"
+          if ! dir="$(realpath "$root/$WORK_DIR/$FUZZ_DIR")"; then
+            echo "::error::fuzz-directory does not exist: ${WORK_DIR}/${FUZZ_DIR}"
+            exit 1
+          fi
+          # Prefix check, not a glob: realpath collapses `..` segments.
+          if [ "$dir" != "$root" ] && [ "${dir#"$root"/}" = "$dir" ]; then
+            echo "::error::fuzz-directory escapes workspace: ${dir}"
+            exit 1
+          fi
+          entries=()
+          if [ -n "$TARGETS" ]; then
+            # word-split is intentional: whitespace-separated target names
+            # shellcheck disable=SC2086
+            for t in $TARGETS; do
+              entries+=("$t")
+            done
+          else
+            # cargo fuzz list prints the [[bin]] names of the fuzz manifest;
+            # the canonical layout declares one [[bin]] per fuzz_targets/*.rs,
+            # so listing file stems is equivalent and avoids installing the
+            # toolchain and cargo-fuzz in this plan job. cargo fuzz run still
+            # validates each target against the manifest.
+            for f in "$dir"/fuzz_targets/*.rs; do
+              if [ ! -f "$f" ]; then
+                continue
+              fi
+              t="${f##*/}"
+              entries+=("${t%.rs}")
+            done
+          fi
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "::error::no fuzz targets in ${dir}/fuzz_targets"
+            exit 1
+          fi
+          rows=()
+          for t in "${entries[@]}"; do
+            if ! [[ "$t" =~ ^[A-Za-z0-9_-]+$ ]]; then
+              echo "::error::fuzz target name charset: ${t}"
+              exit 1
+            fi
+            rows+=("{\"target\":\"${t}\"}")
+          done
+          IFS=,
+          printf 'matrix=%s\n' "{\"include\":[${rows[*]}]}" >>"$GITHUB_OUTPUT"
+
+  fuzz:
+    name: ${{ matrix.target }}
+    needs: plan
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CARGO_TERM_COLOR: always
+      TARGET: ${{ matrix.target }}
+      FUZZ_DIR: ${{ inputs.fuzz-directory }}
+      CARGO_FUZZ_VERSION: ${{ inputs.cargo-fuzz-version }}
+      MAX_TOTAL_TIME: ${{ inputs.max-total-time }}
+      TIMEOUT: ${{ inputs.timeout }}
+      RSS_LIMIT_MB: ${{ inputs.rss-limit-mb }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
+
+      - uses: $/actions/apt-install
+        with:
+          packages: ${{ inputs.apt-packages }}
+
+      # cargo-fuzz needs a nightly compiler for -Zsanitizer; no components
+      # (rust-src / llvm-tools are only needed by cargo fuzz coverage).
+      - uses: $/actions/setup-rust
+        with:
+          rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}/${{ inputs.fuzz-directory }}
+          components: ''
+          cache-key: fuzz-${{ matrix.target }}
+
+      - name: Install cargo-fuzz
+        run: |
+          set -euo pipefail
+          cargo install cargo-fuzz --locked --version "$CARGO_FUZZ_VERSION"
+
+      - name: Record toolchain
+        run: |
+          set -euo pipefail
+          {
+            echo '## CI / Rust fuzz'
+            echo "- rustc: $(rustc --version)"
+            echo "- cargo-fuzz: ${CARGO_FUZZ_VERSION}"
+            echo "- target: ${TARGET}"
+            echo "- max-total-time: ${MAX_TOTAL_TIME}s timeout: ${TIMEOUT}s rss-limit-mb: ${RSS_LIMIT_MB}"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # cargo fuzz seeds the run from fuzz/corpus/<target>; corpus growth stays
+      # in the workspace and is never uploaded or committed.
+      - name: Fuzz
+        run: |
+          set -euo pipefail
+          cargo fuzz run "$TARGET" --fuzz-dir "$FUZZ_DIR" -- \
+            -max_total_time="$MAX_TOTAL_TIME" -timeout="$TIMEOUT" -rss_limit_mb="$RSS_LIMIT_MB"
+
+      - name: Upload crash artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: ${{ inputs.working-directory }}/${{ inputs.fuzz-directory }}/artifacts/${{ matrix.target }}/
+          retention-days: 7
+          if-no-files-found: warn
