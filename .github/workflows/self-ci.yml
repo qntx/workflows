@@ -311,6 +311,55 @@ jobs:
       hermes-commit: 3477757eb2475555cf8d8df24bfb1deb0613880d
       working-directory: fixtures/hermes
 
+  # Self-CI never runs on tag refs, so the callee `release` job stays gated off;
+  # the caller-side guard keeps that true if the triggers ever change.
+  e2e-release-rust:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    uses: $/.github/workflows/release-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/release
+      bin: fixture-bin
+      package: fixture-bin
+
+  e2e-release-rust-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: e2e-release-rust
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: downloads
+
+      - name: Verify checksums as a consumer
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sums=(*.sha256)
+          if [[ ${#sums[@]} -eq 0 ]]; then
+            echo '::error::no .sha256 files in merged dist artifacts'
+            exit 1
+          fi
+          for f in "${sums[@]}"; do
+            asset="${f%.sha256}"
+            name="$(awk '{print $2}' "$f")"
+            if [[ "$name" != "$asset" ]]; then
+              echo "::error::$f second field is '$name', expected bare name '$asset'"
+              exit 1
+            fi
+            sha256sum -c "$f"
+            shasum -a 256 -c "$f"
+          done
+          echo "verified ${#sums[@]} checksum files"
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -364,6 +413,8 @@ jobs:
         e2e-publish-npm,
         e2e-publish-npm-wasm,
         e2e-hermes,
+        e2e-release-rust,
+        e2e-release-rust-verify,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -393,7 +444,9 @@ jobs:
           || needs.e2e-publish-crates.result != 'success'
           || needs.e2e-publish-npm.result != 'success'
           || needs.e2e-publish-npm-wasm.result != 'success'
-          || needs.e2e-hermes.result != 'success' }}
+          || needs.e2e-hermes.result != 'success'
+          || needs.e2e-release-rust.result != 'success'
+          || needs.e2e-release-rust-verify.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1
