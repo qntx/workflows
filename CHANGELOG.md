@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-10-10
+
+### Fixed
+
+- `publish-npm.yml` bun Test step runs `bun run test` when `package.json` declares `scripts.test` (the `ci-bun.yml` contract); raw `bun test` via the file heuristic remains the fallback only when no script exists. Publishing a bun package previously always used Bun's built-in runner, which failed `@qntx/nostr` whose tests run under `vp test`. `fixtures/npm` declares a `test` script with an env marker so `e2e-publish-npm` covers the script path (#99).
+
 ## [2.8.0] - 2026-10-09
 
 ### Added
