@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `release-rust.yml` `.sha256` files now carry the canonical GNU text format `<hash>  <name>` with the bare asset name instead of the `dist/` path, so consumers can run `sha256sum -c <asset>.sha256` in the download directory (previously it failed with "No such file or directory"; Windows Git Bash also prefixed the path with `*`). The Package step self-verifies the checksum it just wrote, so a regression fails the release build instead of shipping a broken checksum file.
+
+### Added
+
+- `release-rust.yml` input `working-directory` (default `'.'`): the toolchain is resolved from its `rust-toolchain` file (targets are added to that toolchain), Build and Package run in it, and `dist/` is rooted inside it. The default leaves existing callers byte-for-byte unchanged.
+- Self-CI e2e coverage: `e2e-release-rust` drives `release-rust.yml` against the new standalone `fixtures/release` workspace (`fixture-bin`), and `e2e-release-rust-verify` downloads the merged `dist-*` artifacts and verifies every `*.sha256` with both `sha256sum -c` and `shasum -a 256 -c` as a consumer would. Both jobs are gated to never run on tag refs, so a GitHub Release can never be created from Self / CI.
+
 ## [2.8.1] - 2026-10-10
 
 ### Fixed

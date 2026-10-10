@@ -11,6 +11,11 @@ on:
         description: 'Cargo package name to build (passed to cargo build -p).'
         required: true
         type: string
+      working-directory:
+        description: 'Working directory relative to the repository root.'
+        required: false
+        type: string
+        default: '.'
       cross-packages:
         description: 'Whitespace-separated apt packages for ARM64 cross-compilation.'
         required: false
@@ -27,7 +32,7 @@ on:
         type: string
         default: ''
       rust-version:
-        description: 'Rust toolchain. Empty honours the repository rust-toolchain file, else stable.'
+        description: 'Rust toolchain. Empty honours the working-directory rust-toolchain file, else stable.'
         required: false
         type: string
         default: ''
@@ -83,6 +88,7 @@ jobs:
       - uses: $/actions/setup-rust
         with:
           rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}
           targets: ${{ matrix.target }}
           cache-key: ${{ matrix.target }}
 
@@ -124,12 +130,14 @@ jobs:
             ${{ inputs.cross-env }}
 
       - name: Build
+        working-directory: ${{ inputs.working-directory }}
         env:
           TARGET: ${{ matrix.target }}
           PACKAGE: ${{ inputs.package }}
         run: cargo build --release --locked --target "$TARGET" -p "$PACKAGE"
 
       - name: Package
+        working-directory: ${{ inputs.working-directory }}
         env:
           BIN: ${{ inputs.bin }}
           TARGET: ${{ matrix.target }}
@@ -161,10 +169,18 @@ jobs:
             asset="dist/$staging.tar.gz"
           fi
 
+          # Canonical GNU text format with the bare asset name so consumers can run
+          # `sha256sum -c <name>.sha256` in the download directory. Verification is
+          # fail-closed: a checksum that does not verify breaks the release build.
+          name="$(basename "$asset")"
           if command -v sha256sum &>/dev/null; then
-            sha256sum "$asset" >"$asset.sha256"
+            hash="$(sha256sum "$asset" | cut -d' ' -f1)"
+            printf '%s  %s\n' "$hash" "$name" >"dist/$name.sha256"
+            (cd dist && sha256sum -c "$name.sha256")
           else
-            shasum -a 256 "$asset" >"$asset.sha256"
+            hash="$(shasum -a 256 "$asset" | cut -d' ' -f1)"
+            printf '%s  %s\n' "$hash" "$name" >"dist/$name.sha256"
+            (cd dist && shasum -a 256 -c "$name.sha256")
           fi
 
           rm -rf "$staging"
@@ -172,7 +188,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-${{ matrix.target }}
-          path: dist/
+          path: ${{ inputs.working-directory }}/dist/
           if-no-files-found: error
           retention-days: 7
 
