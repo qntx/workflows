@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-10-10
+
 ### Fixed
 
-- `release-rust.yml` `.sha256` files now carry the canonical GNU text format `<hash>  <name>` with the bare asset name instead of the `dist/` path, so consumers can run `sha256sum -c <asset>.sha256` in the download directory (previously it failed with "No such file or directory"; Windows Git Bash also prefixed the path with `*`). The Package step self-verifies the checksum it just wrote, so a regression fails the release build instead of shipping a broken checksum file.
+- `release-rust.yml` `.sha256` files now carry the canonical GNU text format `<hash>  <name>` with the bare asset name instead of the `dist/` path, so consumers can run `sha256sum -c <asset>.sha256` in the download directory (previously it failed with "No such file or directory"; Windows Git Bash also prefixed the path with `*`). The Package step self-verifies the checksum it just wrote, so a regression fails the release build instead of shipping a broken checksum file (#101).
 
 ### Added
 
