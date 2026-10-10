@@ -32,7 +32,7 @@ on:
         type: string
         default: ''
       rust-version:
-        description: 'Rust toolchain. Empty honours the repository rust-toolchain file, else stable.'
+        description: 'Rust toolchain. Empty honours the working-directory rust-toolchain file, else stable.'
         required: false
         type: string
         default: ''
