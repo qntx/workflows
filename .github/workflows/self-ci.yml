@@ -311,13 +311,15 @@ jobs:
       hermes-commit: 3477757eb2475555cf8d8df24bfb1deb0613880d
       working-directory: fixtures/hermes
 
-  # Self-CI never runs on tag refs, so the callee `release` job stays gated off;
-  # the caller-side guard keeps that true if the triggers ever change.
+  # The callee declares `contents: write` for its tag-only `release` job, and a
+  # caller must grant every permission a called workflow requests. Self-CI never
+  # runs on tag refs, so `release` stays gated off; the caller-side guard keeps
+  # that true if the triggers ever change.
   e2e-release-rust:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     uses: $/.github/workflows/release-rust.yml
     permissions:
-      contents: read
+      contents: write
     with:
       working-directory: fixtures/release
       bin: fixture-bin
