@@ -88,6 +88,7 @@ jobs:
       - uses: $/actions/setup-rust
         with:
           rust-version: ${{ inputs.rust-version }}
+          working-directory: ${{ inputs.working-directory }}
           targets: ${{ matrix.target }}
           cache-key: ${{ matrix.target }}
 
