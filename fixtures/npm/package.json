@@ -2,5 +2,8 @@
   "name": "@qntx-workflows-e2e/npm-fixture",
   "version": "0.0.1",
   "type": "module",
-  "exports": "./index.js"
+  "exports": "./index.js",
+  "scripts": {
+    "test": "FIXTURE_TEST_SCRIPT=1 bun test index.test.js"
+  }
 }
