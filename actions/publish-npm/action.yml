@@ -152,7 +152,11 @@ runs:
             npm test --if-present
             ;;
           bun)
-            if find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
+            # scripts.test wins: the file heuristic only searches three levels
+            # deep and would run a different runner than the declared script.
+            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+              bun run test
+            elif find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
                  \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
                  -print -quit | grep -q .; then
               bun test
