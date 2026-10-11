@@ -1,0 +1,27 @@
+{
+  "name": "@qntx-workflows-e2e/wasm-c-fixture",
+  "version": "0.0.1",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "**/*.wasm"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/wasm.mjs"
+    }
+  },
+  "scripts": {
+    "build:wasm": "mkdir -p dist && \"${CC_wasm32_unknown_unknown:-clang}\" --target=wasm32-unknown-unknown -nostdlib -O2 -Wl,--no-entry -o dist/fixture_wasm_c.wasm src/fixture.c && cp src/wasm.mjs dist/wasm.mjs",
+    "test:wasm": "bun test"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.4.0",
+      "onFail": "ignore"
+    }
+  }
+}

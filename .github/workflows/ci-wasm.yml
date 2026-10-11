@@ -23,8 +23,13 @@ on:
         required: false
         type: string
         default: '.'
+      language:
+        description: 'Toolchain language: rust (Rust cdylib built by cargo) or c (clang only; cargo-directory and targets are ignored and rust-checks must be false).'
+        required: false
+        type: string
+        default: 'rust'
       cargo-directory:
-        description: 'Cargo workspace for fmt, clippy, test, and Cargo.lock. Relative to the repository root.'
+        description: 'Cargo workspace for fmt, clippy, test, and Cargo.lock. Relative to the repository root. Ignored when language is c.'
         required: false
         type: string
         default: '.'
@@ -54,7 +59,7 @@ on:
         type: boolean
         default: false
       rust-checks:
-        description: 'Run cargo fmt, clippy, and test on the cargo workspace. Disable when a sibling ci-rust job covers them.'
+        description: 'Run cargo fmt, clippy, and test on the cargo workspace. Disable when a sibling ci-rust job covers them. Must be false when language is c.'
         required: false
         type: boolean
         default: true
@@ -74,7 +79,7 @@ on:
         type: string
         default: './wasm'
       targets:
-        description: 'Full rustup --target list passed to the pinned dtolnay action. Not merged with rust-toolchain.toml.'
+        description: 'Full rustup --target list passed to the pinned dtolnay action. Not merged with rust-toolchain.toml. Ignored when language is c.'
         required: false
         type: string
         default: 'wasm32-unknown-unknown'
@@ -99,10 +104,19 @@ jobs:
           persist-credentials: false
           submodules: ${{ inputs.submodules && 'recursive' || 'false' }}
 
+      - name: Reject rust-checks in C mode
+        if: ${{ inputs.language == 'c' && inputs.rust-checks }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '::error::ci-wasm: rust-checks must be false when language is c'
+          exit 1
+
       - uses: $/actions/setup-wasm
         with:
           toolchain: true
           dist-check: false
+          language: ${{ inputs.language }}
           apt-packages: ${{ inputs.apt-packages }}
           cargo-directory: ${{ inputs.cargo-directory }}
           package-directory: ${{ inputs.working-directory }}
@@ -164,6 +178,7 @@ jobs:
         with:
           toolchain: false
           dist-check: true
+          language: ${{ inputs.language }}
           package-directory: ${{ inputs.working-directory }}
           package-manager: ${{ inputs.package-manager }}
           dist-export: ${{ inputs.dist-export }}

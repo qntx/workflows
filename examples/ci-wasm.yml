@@ -25,6 +25,7 @@ jobs:
     with:
       package-manager: bun
       bench: true
+      # language: c          # build:wasm compiles C with clang; requires rust-checks: false
       # rust-checks: false   # when a sibling ci-rust job runs fmt/clippy/test
       # scripts: parity:check   # extra package scripts run after test:wasm
       # scripts-directory: e2e   # where the extra scripts run; empty means working-directory

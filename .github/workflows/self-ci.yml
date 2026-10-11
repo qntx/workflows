@@ -237,6 +237,17 @@ jobs:
       scripts: e2e:scripts-dir
       scripts-directory: fixtures/wasm/scripts
 
+  e2e-wasm-c:
+    uses: $/.github/workflows/ci-wasm.yml
+    permissions:
+      contents: read
+    with:
+      language: c
+      rust-checks: false
+      working-directory: fixtures/wasm-c
+      install-directory: fixtures/wasm-c
+      dist-export: .
+
   e2e-rust-each-feature:
     uses: $/.github/workflows/ci-rust.yml
     permissions:
@@ -299,6 +310,21 @@ jobs:
       install-directory: fixtures/wasm
       working-directory: fixtures/wasm
       cargo-directory: fixtures/wasm
+      dist-export: .
+      dry-run: true
+
+  e2e-publish-npm-wasm-c:
+    uses: $/.github/workflows/publish-npm.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      package-manager: bun
+      wasm: true
+      language: c
+      timeout-minutes: 30
+      install-directory: fixtures/wasm-c
+      working-directory: fixtures/wasm-c
       dist-export: .
       dry-run: true
 
@@ -409,11 +435,13 @@ jobs:
         e2e-fuzz,
         e2e-wasm,
         e2e-wasm-scripts-dir,
+        e2e-wasm-c,
         e2e-cross,
         e2e-cross-features,
         e2e-publish-crates,
         e2e-publish-npm,
         e2e-publish-npm-wasm,
+        e2e-publish-npm-wasm-c,
         e2e-hermes,
         e2e-release-rust,
         e2e-release-rust-verify,
