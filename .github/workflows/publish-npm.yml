@@ -53,6 +53,11 @@ on:
         required: false
         type: boolean
         default: false
+      language:
+        description: 'Wasm toolchain language: rust (default; cargo cdylib build) or c (clang only; cargo-directory is ignored). Used only when wasm is true.'
+        required: false
+        type: string
+        default: 'rust'
       cargo-directory:
         description: 'Cargo workspace relative to the repository root. Used only when wasm is true. Jailed. Lockfile lookup only. No wasm-bindgen version override.'
         required: false
@@ -103,6 +108,7 @@ jobs:
         with:
           toolchain: true
           dist-check: false
+          language: ${{ inputs.language }}
           cargo-directory: ${{ inputs.cargo-directory }}
           dist-export: ${{ inputs.dist-export }}
           package-directory: ${{ inputs.working-directory }}
@@ -120,5 +126,6 @@ jobs:
           bun-version: ${{ inputs.bun-version }}
           access: ${{ inputs.access }}
           wasm: ${{ inputs.wasm }}
+          language: ${{ inputs.language }}
           dist-export: ${{ inputs.dist-export }}
           dry-run: ${{ inputs.dry-run }}

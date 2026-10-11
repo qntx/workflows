@@ -23,6 +23,10 @@ inputs:
     description: 'Skip the generic build, run build:wasm once, publish with --ignore-scripts. Requires setup-wasm earlier in the job.'
     required: false
     default: 'false'
+  language:
+    description: 'Wasm toolchain language (rust or c). Forwarded to the wasm dist check only; the toolchain setup happens earlier in the caller job.'
+    required: false
+    default: 'rust'
   dist-export:
     description: 'Package exports key checked by the wasm dist contract. "." selects the root export of a dedicated wasm package.'
     required: false
@@ -136,6 +140,7 @@ runs:
       with:
         toolchain: false
         dist-check: true
+        language: ${{ inputs.language }}
         package-directory: ${{ inputs.working-directory }}
         package-manager: ${{ inputs.package-manager }}
         dist-export: ${{ inputs.dist-export }}

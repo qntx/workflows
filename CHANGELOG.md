@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `actions/setup-wasm`, `ci-wasm.yml`, `publish-npm.yml` and `actions/publish-npm` input `language` (`rust` default, or `c`): in `c` mode the wasm toolchain is apt `clang lld llvm` plus the CC/AR/CFLAGS export only — Rust install, the cdylib check, wasm-bindgen-cli, and the `cargo-directory`/`targets`/`components`/`cache-key` inputs are ignored. `ci-wasm.yml` fails fast when `language: c` is combined with `rust-checks: true`. The package and dist contracts are language-agnostic and run unchanged in both modes.
+- Self-CI e2e coverage: `e2e-wasm-c` and `e2e-publish-npm-wasm-c` drive the C mode against the new `fixtures/wasm-c` package (a C file compiled by clang into `dist/*.wasm`, exercising `build:wasm`, `test:wasm`, and the publish dry-run path).
+
 ## [2.8.2] - 2026-10-10
 
 ### Fixed

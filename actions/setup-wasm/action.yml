@@ -5,6 +5,10 @@ inputs:
     description: 'When true, apt, Rust from the toolchain file, wasm-bindgen-cli, cdylib and package checks, and CC/AR/CFLAGS.'
     required: false
     default: 'true'
+  language:
+    description: 'Toolchain language: rust (toolchain file, cdylib, wasm-bindgen) or c (apt clang only; cargo inputs are ignored).'
+    required: false
+    default: 'rust'
   dist-check:
     description: 'When true, require the dist-export entry to resolve under dist/ and at least one dist/*.wasm.'
     required: false
@@ -14,7 +18,7 @@ inputs:
     required: false
     default: 'clang lld llvm'
   cargo-directory:
-    description: 'Cargo workspace relative to GITHUB_WORKSPACE. Cargo.lock and cargo metadata. Jailed.'
+    description: 'Cargo workspace relative to GITHUB_WORKSPACE. Cargo.lock and cargo metadata. Jailed. Ignored when language is c.'
     required: false
     default: '.'
   package-directory:
@@ -26,15 +30,15 @@ inputs:
     required: false
     default: 'bun'
   cache-key:
-    description: 'Cargo cache key suffix forwarded to setup-rust.'
+    description: 'Cargo cache key suffix forwarded to setup-rust. Ignored when language is c.'
     required: false
     default: 'wasm32'
   components:
-    description: 'Comma-separated rustup components. Not read from the toolchain file.'
+    description: 'Comma-separated rustup components. Not read from the toolchain file. Ignored when language is c.'
     required: false
     default: 'rustfmt, clippy'
   targets:
-    description: 'Comma-separated rustup targets. Full list, not merged with the toolchain file.'
+    description: 'Comma-separated rustup targets. Full list, not merged with the toolchain file. Ignored when language is c.'
     required: false
     default: 'wasm32-unknown-unknown'
   install-directory:
@@ -74,7 +78,22 @@ runs:
             ;;
         esac
 
+    - name: Reject language
+      shell: bash
+      env:
+        LANGUAGE: ${{ inputs.language }}
+      run: |
+        set -euo pipefail
+        case "$LANGUAGE" in
+          rust | c) ;;
+          *)
+            echo '::error::setup-wasm: language must be rust or c'
+            exit 1
+            ;;
+        esac
+
     - name: Jail cargo directory
+      if: inputs.language == 'rust'
       id: cargo-dir
       shell: bash
       env:
@@ -112,7 +131,7 @@ runs:
         packages: ${{ inputs.apt-packages }}
 
     - name: Install Rust
-      if: inputs.toolchain == 'true'
+      if: inputs.toolchain == 'true' && inputs.language == 'rust'
       uses: $/actions/setup-rust
       with:
         working-directory: ${{ inputs.cargo-directory }}
@@ -121,7 +140,7 @@ runs:
         cache-key: ${{ inputs.cache-key }}
 
     - name: Check cdylib
-      if: inputs.toolchain == 'true'
+      if: inputs.toolchain == 'true' && inputs.language == 'rust'
       shell: bash
       env:
         CARGO_DIR: ${{ steps.cargo-dir.outputs.path }}
@@ -132,7 +151,7 @@ runs:
           bash "$GITHUB_ACTION_PATH/check-cdylib.sh"
 
     - name: Install wasm-bindgen
-      if: inputs.toolchain == 'true'
+      if: inputs.toolchain == 'true' && inputs.language == 'rust'
       shell: bash
       env:
         CARGO_DIR: ${{ steps.cargo-dir.outputs.path }}
