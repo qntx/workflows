@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "js-yaml": "5.4.2",
+    "js-yaml": "5.4.3",
     "markdownlint-cli2": "0.23.3"
   },
   "devDependencies": {
