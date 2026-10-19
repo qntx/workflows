@@ -337,7 +337,7 @@ permissions:
 
 ## Release
 
-`release.yml` and `release-rust.yml`.
+`release.yml` and `release-rust.yml`. `release-rust.yml` `targets` (default: all five supported triples) selects the build matrix; pass a whitespace-separated subset to skip platforms the project does not support. `artifact-prefix` (default `dist`) renames the `dist-<target>` artifacts when one run calls the workflow for the same target more than once.
 
 ```yaml
 permissions:
