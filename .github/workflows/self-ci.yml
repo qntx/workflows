@@ -388,6 +388,57 @@ jobs:
           done
           echo "verified ${#sums[@]} checksum files"
 
+  # Same tag guard as e2e-release-rust. `artifact-prefix` keeps this call's
+  # uploads apart from e2e-release-rust's dist-<target> artifacts (names are
+  # unique per run), and `subset-*` never matches that pair's `dist-*` glob.
+  e2e-release-rust-targets:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    uses: $/.github/workflows/release-rust.yml
+    permissions:
+      contents: write
+    with:
+      working-directory: fixtures/release
+      bin: fixture-bin
+      package: fixture-bin
+      targets: x86_64-unknown-linux-gnu aarch64-apple-darwin
+      artifact-prefix: subset
+
+  e2e-release-rust-targets-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: e2e-release-rust-targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: subset-*
+          merge-multiple: true
+          path: downloads
+
+      - name: Verify the exact asset set
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          expected=(
+            fixture-bin-0.0.0-dev-aarch64-apple-darwin.tar.gz
+            fixture-bin-0.0.0-dev-aarch64-apple-darwin.tar.gz.sha256
+            fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu.tar.gz
+            fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu.tar.gz.sha256
+          )
+          mapfile -t got < <(printf '%s\n' * | sort)
+          if ! diff <(printf '%s\n' "${expected[@]}") <(printf '%s\n' "${got[@]}"); then
+            echo '::error::dist artifacts are not exactly the two requested targets'
+            exit 1
+          fi
+          for f in *.sha256; do
+            sha256sum -c "$f"
+          done
+          echo "asset set matches the targets input"
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -445,6 +496,8 @@ jobs:
         e2e-hermes,
         e2e-release-rust,
         e2e-release-rust-verify,
+        e2e-release-rust-targets,
+        e2e-release-rust-targets-verify,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -476,7 +529,9 @@ jobs:
           || needs.e2e-publish-npm-wasm.result != 'success'
           || needs.e2e-hermes.result != 'success'
           || needs.e2e-release-rust.result != 'success'
-          || needs.e2e-release-rust-verify.result != 'success' }}
+          || needs.e2e-release-rust-verify.result != 'success'
+          || needs.e2e-release-rust-targets.result != 'success'
+          || needs.e2e-release-rust-targets-verify.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

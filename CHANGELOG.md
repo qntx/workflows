@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `release-rust.yml` input `targets` (default: all five supported triples): a `plan` job maps the whitespace-separated subset to the build matrix and fails closed on an unknown, duplicate, or empty list. `release` still `needs: build`, so a caller that does not support a platform drops its targets instead of a failing build blocking the release. The default leaves existing callers byte-for-byte unchanged.
+- `release-rust.yml` input `artifact-prefix` (default `dist`): sets the upload-artifact name prefix (`<prefix>-<target>`) so a run that calls the workflow for the same target more than once does not hit artifact-name conflicts — upload-artifact names are unique per run.
+- Self-CI e2e coverage: `e2e-release-rust-targets` drives `release-rust.yml` with `targets: x86_64-unknown-linux-gnu aarch64-apple-darwin` and `artifact-prefix: subset`, and `e2e-release-rust-targets-verify` downloads the `subset-*` artifacts and asserts the asset set is exactly the two requested targets (a `.tar.gz` and a `.sha256` each, nothing else). Both jobs carry the same never-on-tags guard as the existing release e2e pair.
+
 ## [2.9.0] - 2026-10-11
 
 ### Added
