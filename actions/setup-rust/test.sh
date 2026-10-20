@@ -158,7 +158,7 @@ else
 fi
 
 action="$dir/action.yml"
-if [ "$(grep -c 'dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067' "$action")" -eq 2 ] &&
+if [ "$(grep -c 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8' "$action")" -eq 2 ] &&
   [ "$(grep -c 'Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6' "$action")" -eq 1 ] &&
   grep -F 'toolchain: ${{ inputs.rust-version }}' "$action" >/dev/null &&
   grep -F 'toolchain: stable' "$action" >/dev/null &&
