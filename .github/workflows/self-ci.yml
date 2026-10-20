@@ -328,6 +328,38 @@ jobs:
       dist-export: .
       dry-run: true
 
+  e2e-publish-npm-artifact-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - name: Stage prebuilt artifact
+        run: |
+          set -euo pipefail
+          mkdir -p staging/dist
+          echo 'export const prebuilt = true;' > staging/dist/bundle.js
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-artifact-fixture
+          path: staging
+
+  e2e-publish-npm-artifact:
+    needs: e2e-publish-npm-artifact-upload
+    uses: $/.github/workflows/publish-npm.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      package-manager: bun
+      install-directory: fixtures/npm-artifact
+      working-directory: fixtures/npm-artifact
+      artifact: npm-artifact-fixture
+      dry-run: true
+
   e2e-hermes:
     uses: $/.github/workflows/ci-hermes.yml
     permissions:
@@ -493,6 +525,8 @@ jobs:
         e2e-publish-npm,
         e2e-publish-npm-wasm,
         e2e-publish-npm-wasm-c,
+        e2e-publish-npm-artifact-upload,
+        e2e-publish-npm-artifact,
         e2e-hermes,
         e2e-release-rust,
         e2e-release-rust-verify,
@@ -527,6 +561,8 @@ jobs:
           || needs.e2e-publish-crates.result != 'success'
           || needs.e2e-publish-npm.result != 'success'
           || needs.e2e-publish-npm-wasm.result != 'success'
+          || needs.e2e-publish-npm-wasm-c.result != 'success'
+          || needs.e2e-publish-npm-artifact.result != 'success'
           || needs.e2e-hermes.result != 'success'
           || needs.e2e-release-rust.result != 'success'
           || needs.e2e-release-rust-verify.result != 'success'

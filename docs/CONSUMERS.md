@@ -236,6 +236,8 @@ Set `wasm: true` only together with `timeout-minutes: 30` (`with:`, not a job ke
 
 `dist-export` names the `exports` key the wasm package/dist contracts check (default `./wasm`). A dedicated wasm package whose root export is the loader sets `dist-export: .`. `language` selects the wasm toolchain (`rust` default, or `c` for a clang-compiled `build:wasm` — `cargo-directory` is then ignored). `dry-run: true` runs install/build/wasm checks and the already-published lookup as usual, then publishes with `npm publish --dry-run` (no `--provenance`, so the OIDC token is unused — keep `id-token: write` on the caller job anyway).
 
+`artifact` (default `''`) names an upload-artifact from the same run downloaded into `working-directory` before the install/build/test/publish steps run — for binaries a single publish job cannot build, such as native modules assembled by earlier jobs. The artifact's layout must be relative to the package directory (`dist/...` lands at `<package>/dist/...`). Independently of `artifact`, every entry in package.json `files` must exist after build (globs must match at least one path): npm silently drops missing entries, and the check fails before `npm publish` — in `dry-run` too.
+
 ```yaml
 # Caller owns on:. Pin at @v2.
 # OIDC. Do not set environment, runs-on, or steps.
