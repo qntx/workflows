@@ -1,0 +1,13 @@
+{
+  "name": "@qntx-workflows-e2e/npm-artifact-fixture",
+  "version": "0.0.1",
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "exports": "./dist/bundle.js",
+  "scripts": {
+    "test": "FIXTURE_TEST_SCRIPT=1 bun test index.test.js"
+  }
+}
