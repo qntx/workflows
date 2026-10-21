@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `publish-npm.yml` splits into two jobs (breaking for consumers that introspected job names): unprivileged `pack` (install, build, test, the `files` check, `npm pack`, upload of the tarball plus its GNU-format `.sha256`, named `npm-pack-<working-directory>`) and privileged `publish` (`id-token: write`), which only downloads the artifact, verifies the sha256, runs the already-published check, and executes `npm publish <tgz> --ignore-scripts` — no checkout, install or build on the OIDC side. `--ignore-scripts` is now unconditional (was wasm-only). Caller inputs are unchanged; `actions/publish-npm` now publishes a tarball and the build side lives in `actions/pack-npm` (both private). The publish job has a fixed 10 minute timeout.
+
 ## [2.10.0] - 2026-10-19
 
 ### Added

@@ -1,59 +1,33 @@
 name: publish-npm
-description: 'Install, build, test, and npm publish with OIDC trusted publishing. Caller job must grant id-token: write.'
+description: 'Publish a packed npm tarball with OIDC trusted publishing. Caller job must grant id-token: write.'
 inputs:
-  install-directory:
-    required: false
-    default: '.'
-  working-directory:
-    required: false
-    default: '.'
-  package-manager:
-    required: false
-    default: 'npm'
+  artifact:
+    description: 'upload-artifact name produced by pack-npm — the tarball plus its .sha256.'
+    required: true
+  package:
+    description: 'package.json name, forwarded from pack-npm.'
+    required: true
+  version:
+    description: 'package.json version, forwarded from pack-npm.'
+    required: true
   node-version:
     required: false
     default: '24'
-  bun-version:
-    required: false
-    default: '1.4'
   access:
     required: false
     default: 'public'
-  wasm:
-    description: 'Skip the generic build, run build:wasm once, publish with --ignore-scripts. Requires setup-wasm earlier in the job.'
-    required: false
-    default: 'false'
-  language:
-    description: 'Wasm toolchain language (rust or c). Forwarded to the wasm dist check only; the toolchain setup happens earlier in the caller job.'
-    required: false
-    default: 'rust'
-  dist-export:
-    description: 'Package exports key checked by the wasm dist contract. "." selects the root export of a dedicated wasm package.'
-    required: false
-    default: './wasm'
   dry-run:
     description: 'Publish with npm publish --dry-run instead of --provenance. The npm >= 11.5.1 gate is skipped.'
     required: false
     default: 'false'
-outputs:
-  package:
-    value: ${{ steps.pkg.outputs.package }}
-  version:
-    value: ${{ steps.pkg.outputs.version }}
 runs:
   using: composite
   steps:
-    - name: Set up Bun
-      if: ${{ inputs.package-manager == 'bun' }}
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+    - name: Download the packed tarball
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
-        bun-version: ${{ inputs.bun-version }}
-
-    - name: Enable Corepack
-      if: ${{ inputs.package-manager == 'pnpm' || inputs.package-manager == 'yarn' }}
-      shell: bash
-      working-directory: ${{ inputs.install-directory }}
-      run: corepack enable
+        name: ${{ inputs.artifact }}
+        path: pack
 
     - name: Set up Node.js
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -61,188 +35,57 @@ runs:
         node-version: ${{ inputs.node-version }}
         # Trusted publishing exists only on registry.npmjs.org.
         registry-url: 'https://registry.npmjs.org'
-        cache: ${{ inputs.package-manager != 'bun' && inputs.package-manager || '' }}
-        cache-dependency-path: |
-          ${{ inputs.install-directory }}/package-lock.json
-          ${{ inputs.install-directory }}/pnpm-lock.yaml
-          ${{ inputs.install-directory }}/yarn.lock
-          ${{ inputs.install-directory }}/npm-shrinkwrap.json
-        package-manager-cache: false
 
-    - name: Install dependencies
+    - name: Verify the tarball checksum
       shell: bash
-      working-directory: ${{ inputs.install-directory }}
+      working-directory: pack
+      run: |
+        set -euo pipefail
+        # The publish job has no install or build — this is the whole
+        # provenance chain from the unprivileged pack job to what npm sees.
+        sha256sum -c -- *.sha256
+
+    - name: Check whether the version already exists
+      id: pkg
+      shell: bash
       env:
-        PM: ${{ inputs.package-manager }}
+        PKG: ${{ inputs.package }}
+        VER: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        case "$PM" in
-          npm) npm ci ;;
-          pnpm)
-            corepack enable
-            pnpm install --frozen-lockfile
-            ;;
-          yarn)
-            corepack enable
-            if yarn --version | grep -q '^1\.'; then
-              yarn install --frozen-lockfile
-            else
-              yarn install --immutable
-            fi
-            ;;
-          bun)
-            bun install --frozen-lockfile
-            ;;
-          *)
-            echo "::error::Unsupported package manager: $PM"
-            exit 1
-            ;;
-        esac
-
-    - name: Build
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        PM: ${{ inputs.package-manager }}
-        WASM: ${{ inputs.wasm }}
-      run: |
-        set -euo pipefail
-        if [ "$WASM" = true ]; then
-          case "$PM" in
-            bun) bun run build:wasm ;;
-            npm) npm run build:wasm ;;
-            *)
-              echo "::error::Unsupported package manager: $PM"
-              exit 1
-              ;;
-          esac
-        else
-          case "$PM" in
-            npm)
-              npm run build --if-present
-              ;;
-            bun)
-              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-                bun run build
-              fi
-              ;;
-            *)
-              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-                "$PM" run build
-              fi
-              ;;
-          esac
-        fi
-
-    - name: Check wasm dist
-      if: ${{ inputs.wasm == 'true' }}
-      uses: $/actions/setup-wasm
-      with:
-        toolchain: false
-        dist-check: true
-        language: ${{ inputs.language }}
-        package-directory: ${{ inputs.working-directory }}
-        package-manager: ${{ inputs.package-manager }}
-        dist-export: ${{ inputs.dist-export }}
-
-    - name: Test
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        PM: ${{ inputs.package-manager }}
-      run: |
-        set -euo pipefail
-        case "$PM" in
-          npm)
-            npm test --if-present
-            ;;
-          bun)
-            # scripts.test wins: the file heuristic only searches three levels
-            # deep and would run a different runner than the declared script.
-            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-              bun run test
-            elif find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
-                 \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
-                 -print -quit | grep -q .; then
-              bun test
-            fi
-            ;;
-          *)
-            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
-              "$PM" test
-            fi
-            ;;
-        esac
-
-    - name: Check files entries exist
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        set -euo pipefail
-        # Every files entry must exist after build — npm silently drops missing
-        # entries, which would ship a package without e.g. downloaded binaries.
-        # Glob entries must match at least one path.
-        missing=()
-        while IFS= read -r entry; do
-          case "$entry" in
-            *[\*\?\[]*)
-              compgen -G "$entry" >/dev/null || missing+=("$entry (glob matched nothing)")
-              ;;
-            *)
-              [ -e "$entry" ] || missing+=("$entry")
-              ;;
-          esac
-        done < <(jq -r '.files[]?' package.json)
-        if [ "${#missing[@]}" -gt 0 ]; then
-          printf '::error::package.json files entries missing after build: %s\n' "${missing[*]}"
-          exit 1
-        fi
-
-    - id: pkg
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        set -euo pipefail
-        name="$(jq -r .name package.json)"
-        version="$(jq -r .version package.json)"
-        echo "package=${name}" >> "$GITHUB_OUTPUT"
-        echo "version=${version}" >> "$GITHUB_OUTPUT"
         # A rerun after a partial release, or a version published by hand
         # (a new package needs one manual publish before trusted publishing
         # can be configured), must not fail on the existing version.
-        if out="$(npm view "${name}@${version}" version 2>&1)"; then
+        if out="$(npm view "${PKG}@${VER}" version 2>&1)"; then
           exists=false
-          [ "$out" = "$version" ] && exists=true
+          [ "$out" = "$VER" ] && exists=true
         else
           case "$out" in
             *E404*) exists=false ;;
             *)
-              echo "::error::npm view ${name}@${version} failed: ${out}"
+              echo "::error::npm view ${PKG}@${VER} failed: ${out}"
               exit 1
               ;;
           esac
         fi
         echo "exists=${exists}" >> "$GITHUB_OUTPUT"
         if [ "$exists" = true ]; then
-          echo "::notice::${name}@${version} is already on the registry; skipping publish"
+          echo "::notice::${PKG}@${VER} is already on the registry; skipping publish"
         fi
 
     - name: Publish
       if: steps.pkg.outputs.exists != 'true'
       shell: bash
-      working-directory: ${{ inputs.working-directory }}
+      working-directory: pack
       env:
         ACCESS: ${{ inputs.access }}
-        WASM: ${{ inputs.wasm }}
         DRY_RUN: ${{ inputs.dry-run }}
       run: |
         set -euo pipefail
-        args=(--access "$ACCESS")
-        if [ "$WASM" = true ]; then
-          args+=(--ignore-scripts)
-        fi
+        tgz="$(ls -- *.tgz | head -n1)"
+        # --ignore-scripts always: the tarball is never repacked on this side.
         if [ "$DRY_RUN" = true ]; then
-          npm publish "${args[@]}" --dry-run
+          npm publish "$tgz" --access "$ACCESS" --ignore-scripts --dry-run
           exit 0
         fi
         npm_v="$(npm --version)"
@@ -250,4 +93,4 @@ runs:
           echo "::error::npm ${npm_v} does not support OIDC trusted publishing (needs npm >= 11.5.1; raise node-version)"
           exit 1
         fi
-        npm publish "${args[@]}" --provenance
+        npm publish "$tgz" --access "$ACCESS" --ignore-scripts --provenance
