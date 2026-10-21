@@ -206,6 +206,8 @@ runs:
     - id: pack
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
         # What publish signs and uploads is exactly this tarball; the sha256
@@ -215,10 +217,10 @@ runs:
         echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
         # Artifact names forbid '/', so flatten the package directory; each
         # working-directory maps to a distinct artifact within the caller's run.
-        echo "artifact=npm-pack-$(printf '%s' '${{ inputs.working-directory }}' | tr '/.' '--')" >> "$GITHUB_OUTPUT"
+        echo "artifact=npm-pack-$(printf '%s' "$WORKING_DIRECTORY" | tr '/.' '--')" >> "$GITHUB_OUTPUT"
 
     - name: Upload the tarball
-      uses: actions/upload-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ steps.pack.outputs.artifact }}
         path: |
