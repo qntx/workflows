@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-10-21
+
 ### Changed
 
-- `publish-npm.yml` splits into two jobs (breaking for consumers that introspected job names): unprivileged `pack` (install, build, test, the `files` check, `npm pack`, upload of the tarball plus its GNU-format `.sha256`, named `npm-pack-<working-directory>`) and privileged `publish` (`id-token: write`), which only downloads the artifact, verifies the sha256, runs the already-published check, and executes `npm publish <tgz> --ignore-scripts` — no checkout, install or build on the OIDC side. `--ignore-scripts` is now unconditional (was wasm-only). Caller inputs are unchanged; `actions/publish-npm` now publishes a tarball and the build side lives in `actions/pack-npm` (both private). The publish job has a fixed 10 minute timeout.
+- `publish-npm.yml` splits into two jobs (breaking for consumers that introspected job names): unprivileged `pack` (install, build, test, the `files` check, `npm pack`, upload of the tarball plus its GNU-format `.sha256`, named `npm-pack-<working-directory>`) and privileged `publish` (`id-token: write`), which only downloads the artifact, verifies the sha256, runs the already-published check, and executes `npm publish <tgz> --ignore-scripts` — no checkout, install or build on the OIDC side. `--ignore-scripts` is now unconditional (was wasm-only). Caller inputs are unchanged; `actions/publish-npm` now publishes a tarball and the build side lives in `actions/pack-npm` (both private). The publish job has a fixed 10 minute timeout (#113).
+
+## [2.11.0] - 2026-10-21
+
+### Added
+
+- `publish-npm.yml` and `actions/publish-npm` input `artifact` (default `''`): downloads the named upload-artifact from the same run into `working-directory` before the publish steps, so a caller can ship prebuilt binaries produced by an earlier job (#112).
+- `actions/publish-npm` checks every non-glob `files` entry exists (and every glob entry matches a path) before packing, so a package can no longer be published silently missing a declared file (#112).
+- Self-CI e2e coverage: `e2e-publish-npm-artifact` publishes a fixture package whose `files` entry is provided only by the downloaded artifact (#112).
 
 ## [2.10.0] - 2026-10-19
 
