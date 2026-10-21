@@ -1,0 +1,230 @@
+name: pack-npm
+description: 'Install, build, test, verify files entries, npm pack, and upload the tarball with its sha256. Runs unprivileged — the separate publish-npm action publishes the artifact.'
+inputs:
+  install-directory:
+    required: false
+    default: '.'
+  working-directory:
+    required: false
+    default: '.'
+  package-manager:
+    required: false
+    default: 'npm'
+  node-version:
+    required: false
+    default: '24'
+  bun-version:
+    required: false
+    default: '1.4'
+  wasm:
+    description: 'Skip the generic build, run build:wasm once. Requires setup-wasm earlier in the job.'
+    required: false
+    default: 'false'
+  language:
+    description: 'Wasm toolchain language (rust or c). Forwarded to the wasm dist check only; the toolchain setup happens earlier in the caller job.'
+    required: false
+    default: 'rust'
+  dist-export:
+    description: 'Package exports key checked by the wasm dist contract. "." selects the root export of a dedicated wasm package.'
+    required: false
+    default: './wasm'
+outputs:
+  package:
+    value: ${{ steps.pkg.outputs.package }}
+  version:
+    value: ${{ steps.pkg.outputs.version }}
+  tarball:
+    value: ${{ steps.pack.outputs.tarball }}
+  artifact:
+    value: ${{ steps.pack.outputs.artifact }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Bun
+      if: ${{ inputs.package-manager == 'bun' }}
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Enable Corepack
+      if: ${{ inputs.package-manager == 'pnpm' || inputs.package-manager == 'yarn' }}
+      shell: bash
+      working-directory: ${{ inputs.install-directory }}
+      run: corepack enable
+
+    - name: Set up Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        # Trusted publishing exists only on registry.npmjs.org.
+        registry-url: 'https://registry.npmjs.org'
+        cache: ${{ inputs.package-manager != 'bun' && inputs.package-manager || '' }}
+        cache-dependency-path: |
+          ${{ inputs.install-directory }}/package-lock.json
+          ${{ inputs.install-directory }}/pnpm-lock.yaml
+          ${{ inputs.install-directory }}/yarn.lock
+          ${{ inputs.install-directory }}/npm-shrinkwrap.json
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.install-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          npm) npm ci ;;
+          pnpm)
+            corepack enable
+            pnpm install --frozen-lockfile
+            ;;
+          yarn)
+            corepack enable
+            if yarn --version | grep -q '^1\.'; then
+              yarn install --frozen-lockfile
+            else
+              yarn install --immutable
+            fi
+            ;;
+          bun)
+            bun install --frozen-lockfile
+            ;;
+          *)
+            echo "::error::Unsupported package manager: $PM"
+            exit 1
+            ;;
+        esac
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+        WASM: ${{ inputs.wasm }}
+      run: |
+        set -euo pipefail
+        if [ "$WASM" = true ]; then
+          case "$PM" in
+            bun) bun run build:wasm ;;
+            npm) npm run build:wasm ;;
+            *)
+              echo "::error::Unsupported package manager: $PM"
+              exit 1
+              ;;
+          esac
+        else
+          case "$PM" in
+            npm)
+              npm run build --if-present
+              ;;
+            bun)
+              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+                bun run build
+              fi
+              ;;
+            *)
+              if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+                "$PM" run build
+              fi
+              ;;
+          esac
+        fi
+
+    - name: Check wasm dist
+      if: ${{ inputs.wasm == 'true' }}
+      uses: $/actions/setup-wasm
+      with:
+        toolchain: false
+        dist-check: true
+        language: ${{ inputs.language }}
+        package-directory: ${{ inputs.working-directory }}
+        package-manager: ${{ inputs.package-manager }}
+        dist-export: ${{ inputs.dist-export }}
+
+    - name: Test
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PM: ${{ inputs.package-manager }}
+      run: |
+        set -euo pipefail
+        case "$PM" in
+          npm)
+            npm test --if-present
+            ;;
+          bun)
+            # scripts.test wins: the file heuristic only searches three levels
+            # deep and would run a different runner than the declared script.
+            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+              bun run test
+            elif find . -maxdepth 3 -not -path './node_modules/*' -not -path './.git/*' \
+                 \( -name '*.test.*' -o -name '*.spec.*' -o -path './test/*' -o -path './tests/*' \) \
+                 -print -quit | grep -q .; then
+              bun test
+            fi
+            ;;
+          *)
+            if jq -e '.scripts.test' package.json >/dev/null 2>&1; then
+              "$PM" test
+            fi
+            ;;
+        esac
+
+    - name: Check files entries exist
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        # Every files entry must exist after build — npm silently drops missing
+        # entries, which would ship a package without e.g. downloaded binaries.
+        # Glob entries must match at least one path.
+        missing=()
+        while IFS= read -r entry; do
+          case "$entry" in
+            *[\*\?\[]*)
+              compgen -G "$entry" >/dev/null || missing+=("$entry (glob matched nothing)")
+              ;;
+            *)
+              [ -e "$entry" ] || missing+=("$entry")
+              ;;
+          esac
+        done < <(jq -r '.files[]?' package.json)
+        if [ "${#missing[@]}" -gt 0 ]; then
+          printf '::error::package.json files entries missing after build: %s\n' "${missing[*]}"
+          exit 1
+        fi
+
+    - id: pkg
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "package=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
+        echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+    - id: pack
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        # What publish signs and uploads is exactly this tarball; the sha256
+        # lets the publish job prove it received the same bytes.
+        tarball="$(npm pack --silent)"
+        sha256sum "$tarball" > "$tarball.sha256"
+        echo "tarball=${tarball}" >> "$GITHUB_OUTPUT"
+        # Artifact names forbid '/', so flatten the package directory; each
+        # working-directory maps to a distinct artifact within the caller's run.
+        echo "artifact=npm-pack-$(printf '%s' "$WORKING_DIRECTORY" | tr '/.' '--')" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the tarball
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ steps.pack.outputs.artifact }}
+        path: |
+          ${{ inputs.working-directory }}/${{ steps.pack.outputs.tarball }}
+          ${{ inputs.working-directory }}/${{ steps.pack.outputs.tarball }}.sha256
+        retention-days: 1
+        if-no-files-found: error

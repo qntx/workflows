@@ -4,6 +4,12 @@ name: Publish / npm
 # and each package needs a Trusted Publisher on npmjs.com naming the caller
 # repository and this workflow. `npm publish` always passes `--provenance`
 # unless `dry-run` is set, which publishes with `--dry-run` and no provenance.
+#
+# The workflow splits into an unprivileged `pack` job (install, build, test,
+# files check, npm pack — no token) and a privileged `publish` job that only
+# downloads the tarball, verifies its sha256, and runs `npm publish` — no
+# checkout, install or build, so a compromised build cannot alter what is
+# signed or reach the OIDC token.
 
 on:
   workflow_call:
@@ -49,7 +55,7 @@ on:
         type: string
         default: 'public'
       wasm:
-        description: 'When true, setup-wasm runs in the publish job and npm publish gets --ignore-scripts after one build:wasm. Callers set timeout-minutes to 30. Default false keeps the current publish path and the 15 minute timeout.'
+        description: 'When true, setup-wasm runs in the pack job ahead of one build:wasm. npm publish always passes --ignore-scripts. Callers set timeout-minutes to 30. Default false keeps the generic build and the 15 minute timeout.'
         required: false
         type: boolean
         default: false
@@ -94,15 +100,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  pack:
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read
-      id-token: write
     outputs:
       package: ${{ steps.run.outputs.package }}
       version: ${{ steps.run.outputs.version }}
+      artifact: ${{ steps.run.outputs.artifact }}
     steps:
       - uses: $/actions/hardened-checkout
         with:
@@ -128,15 +134,33 @@ jobs:
           name: ${{ inputs.artifact }}
           path: ${{ inputs.working-directory }}
       - id: run
-        uses: $/actions/publish-npm
+        uses: $/actions/pack-npm
         with:
           install-directory: ${{ inputs.install-directory }}
           working-directory: ${{ inputs.working-directory }}
           package-manager: ${{ inputs.package-manager }}
           node-version: ${{ inputs.node-version }}
           bun-version: ${{ inputs.bun-version }}
-          access: ${{ inputs.access }}
           wasm: ${{ inputs.wasm }}
           language: ${{ inputs.language }}
           dist-export: ${{ inputs.dist-export }}
+
+  publish:
+    needs: pack
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      package: ${{ needs.pack.outputs.package }}
+      version: ${{ needs.pack.outputs.version }}
+    steps:
+      - uses: $/actions/publish-npm
+        with:
+          artifact: ${{ needs.pack.outputs.artifact }}
+          package: ${{ needs.pack.outputs.package }}
+          version: ${{ needs.pack.outputs.version }}
+          node-version: ${{ inputs.node-version }}
+          access: ${{ inputs.access }}
           dry-run: ${{ inputs.dry-run }}
