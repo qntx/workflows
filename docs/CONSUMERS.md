@@ -339,7 +339,9 @@ permissions:
 
 ## Release
 
-`release.yml` and `release-rust.yml`. `release-rust.yml` `targets` (default: all five supported triples) selects the build matrix; pass a whitespace-separated subset to skip platforms the project does not support. `artifact-prefix` (default `dist`) renames the `dist-<target>` artifacts when one run calls the workflow for the same target more than once.
+`release.yml` and `release-rust.yml`. `release-rust.yml` `targets` (default: all five gnu/apple/msvc triples) selects the build matrix; pass a whitespace-separated subset to skip platforms the project does not support, or append the opt-in `x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl` triples for statically linked Linux binaries (built natively on `ubuntu-24.04` / `ubuntu-24.04-arm` via `musl-tools`). Linux build runners are pinned to `ubuntu-24.04`. `artifact-prefix` (default `dist`) renames the `dist-<target>` artifacts when one run calls the workflow for the same target more than once.
+
+The `release` job publishes draft-first — draft release, all assets, then publish — which is required for GitHub immutable releases and also removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; a tag that is already published fails closed instead of mutating assets.
 
 ```yaml
 permissions:
