@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-10-24
+
 ### Added
 
-- `release-rust.yml`: opt-in `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` triples for `targets` (not in the default five). Both build natively — x86_64 on `ubuntu-24.04`, aarch64 on `ubuntu-24.04-arm` — install `musl-tools` via `$/actions/apt-install`, and export `CC_<target>=musl-gcc` for crates with C code. Self-CI `e2e-release-rust` now builds both musl targets; `e2e-release-rust-verify` additionally asserts the x86_64 archive is statically linked (`file`) and runs, and `e2e-release-rust-musl-arm-verify` does the same for aarch64 on `ubuntu-24.04-arm`.
-- `release-rust.yml` job `release` publishes draft-first: the release is created as a draft with all assets attached, then published via `gh release edit --draft=false --latest=<true|false>` (`--latest=false` on prerelease tags). This is required for GitHub immutable releases and removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; an already-published release for the tag fails closed instead of mutating its assets.
+- `release-rust.yml`: opt-in `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` triples for `targets` (not in the default five). Both build natively — x86_64 on `ubuntu-24.04`, aarch64 on `ubuntu-24.04-arm` — install `musl-tools` via `$/actions/apt-install`, and export `CC_<target>=musl-gcc` for crates with C code. Self-CI `e2e-release-rust` now builds both musl targets; `e2e-release-rust-verify` additionally asserts the x86_64 archive is statically linked (`file`) and runs, and `e2e-release-rust-musl-arm-verify` does the same for aarch64 on `ubuntu-24.04-arm` (#115).
+- `release-rust.yml` job `release` publishes draft-first: the release is created as a draft with all assets attached, then published via `gh release edit --draft=false --latest=<true|false>` (`--latest=false` on prerelease tags). This is required for GitHub immutable releases and removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; an already-published release for the tag fails closed instead of mutating its assets (#115).
 
 ### Changed
 
-- `release-rust.yml` Linux build runners pinned from `ubuntu-latest` to `ubuntu-24.04` (`ubuntu-24.04-arm` for `aarch64-unknown-linux-musl`), so the glibc floor of published binaries does not drift when `ubuntu-latest` migrates to Ubuntu 26.
+- `release-rust.yml` Linux build runners pinned from `ubuntu-latest` to `ubuntu-24.04` (`ubuntu-24.04-arm` for `aarch64-unknown-linux-musl`), so the glibc floor of published binaries does not drift when `ubuntu-latest` migrates to Ubuntu 26 (#115).
 
 ## [2.12.0] - 2026-10-21
 
