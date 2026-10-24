@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       targets:
-        description: 'Whitespace-separated subset of the five supported triples (x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-pc-windows-msvc, aarch64-pc-windows-msvc).'
+        description: 'Whitespace-separated subset of the supported triples: the five defaults (x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-pc-windows-msvc, aarch64-pc-windows-msvc) plus two opt-in musl triples (x86_64-unknown-linux-musl, aarch64-unknown-linux-musl).'
         required: false
         type: string
         default: 'x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc'
@@ -84,10 +84,12 @@ jobs:
           # shellcheck disable=SC2086
           for t in $TARGETS; do
             case "$t" in
-              x86_64-unknown-linux-gnu) os='ubuntu-latest'; cross=false ;;
-              aarch64-unknown-linux-gnu) os='ubuntu-latest'; cross=true ;;
-              aarch64-apple-darwin) os='macos-latest'; cross=false ;;
-              x86_64-pc-windows-msvc | aarch64-pc-windows-msvc) os='windows-latest'; cross=false ;;
+              x86_64-unknown-linux-gnu) os='ubuntu-24.04'; cross=false; musl=false ;;
+              aarch64-unknown-linux-gnu) os='ubuntu-24.04'; cross=true; musl=false ;;
+              x86_64-unknown-linux-musl) os='ubuntu-24.04'; cross=false; musl=true ;;
+              aarch64-unknown-linux-musl) os='ubuntu-24.04-arm'; cross=false; musl=true ;;
+              aarch64-apple-darwin) os='macos-latest'; cross=false; musl=false ;;
+              x86_64-pc-windows-msvc | aarch64-pc-windows-msvc) os='windows-latest'; cross=false; musl=false ;;
               *)
                 echo "::error::unsupported target triple: ${t}"
                 exit 1
@@ -100,8 +102,8 @@ jobs:
                 ;;
             esac
             seen+="$t "
-            entries+=("$(jq -cn --arg target "$t" --arg os "$os" --argjson cross "$cross" \
-              '{target: $target, os: $os} + (if $cross then {cross: true} else {} end)')")
+            entries+=("$(jq -cn --arg target "$t" --arg os "$os" --argjson cross "$cross" --argjson musl "$musl" \
+              '{target: $target, os: $os} + (if $cross then {cross: true} else {} end) + (if $musl then {musl: true} else {} end)')")
           done
           if [ "${#entries[@]}" -eq 0 ]; then
             echo '::error::targets is empty'
@@ -172,6 +174,18 @@ jobs:
           block: |
             CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
             ${{ inputs.cross-env }}
+
+      - name: Install musl tools
+        if: matrix.musl
+        uses: $/actions/apt-install
+        with:
+          packages: musl-tools
+
+      - name: Apply musl CC
+        if: matrix.musl
+        env:
+          TARGET: ${{ matrix.target }}
+        run: printf 'CC_%s=musl-gcc\n' "${TARGET//-/_}" >>"$GITHUB_ENV"
 
       - name: Build
         working-directory: ${{ inputs.working-directory }}
@@ -244,7 +258,7 @@ jobs:
     permissions:
       contents: write
     outputs:
-      release-url: ${{ steps.gh-release.outputs.url }}
+      release-url: ${{ steps.publish.outputs.url }}
       tag-name: ${{ steps.tag.outputs.name }}
     steps:
       - uses: $/actions/hardened-checkout
@@ -294,7 +308,28 @@ jobs:
         with:
           args: --latest --strip header
 
-      - name: Create GitHub Release
+      # A draft for the tag is fine: action-gh-release finds it via its
+      # listReleases fallback (getReleaseByTag 404s on drafts) and updates it.
+      # An already-published release must not be mutated — with GitHub
+      # immutable releases asset uploads would fail anyway, so fail closed.
+      - name: Guard against an existing published release
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if state="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null)" \
+            && [[ "$state" == 'false' ]]; then
+            echo "::error::release for tag ${TAG} is already published; refusing to mutate it"
+            exit 1
+          fi
+
+      # Draft-first: upload every asset while the release is still a draft,
+      # then publish. Required for GitHub immutable releases (assets are
+      # locked at publish) and recommended for all releases so "Latest"
+      # never points at a release whose assets are still uploading.
+      - name: Create draft GitHub Release
         id: gh-release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
@@ -303,11 +338,26 @@ jobs:
           body: ${{ steps.cliff.outputs.content }}
           files: ${{ steps.assets.outputs.files }}
           prerelease: ${{ steps.pre.outputs.flag }}
-          make_latest: ${{ steps.pre.outputs.flag == 'false' && 'true' || 'false' }}
+          draft: true
+
+      - name: Publish release
+        id: publish
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+          PRERELEASE: ${{ steps.pre.outputs.flag }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          latest=true
+          [[ "$PRERELEASE" == 'true' ]] && latest=false
+          gh release edit "$TAG" --draft=false "--latest=$latest"
+          url="$(gh release view "$TAG" --json url -q .url)"
+          echo "url=$url" >>"$GITHUB_OUTPUT"
 
       - name: Summarize
         env:
-          URL: ${{ steps.gh-release.outputs.url }}
+          URL: ${{ steps.publish.outputs.url }}
           TAG: ${{ steps.tag.outputs.name }}
         run: |
           echo "Released ${TAG}: ${URL}" >>"$GITHUB_STEP_SUMMARY"
