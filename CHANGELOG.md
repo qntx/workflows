@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `ci-hermes.yml`: the Hermes build cache is keyed by the runner image OS (`ImageOS`) as well as the commit. The CLI links the image's libicu, so a binary cached on Ubuntu 24 failed on Ubuntu 26 with `libicuuc.so.74: cannot open shared object file` once `ubuntu-latest` migrated.
+
 ## [2.13.0] - 2026-10-24
 
 ### Added

@@ -75,11 +75,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The Hermes CLI links the runner's libicu, whose soname changes with the
+      # image's OS release (ubuntu-latest moving to Ubuntu 26 dropped ICU 74), so
+      # the cache is keyed per image OS as well as per commit.
+      - id: image
+        run: echo "os=${ImageOS:?ImageOS is unset}" >> "$GITHUB_OUTPUT"
+
       - id: hermes
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/hermes-build
-          key: hermes-${{ runner.os }}-${{ env.HERMES_COMMIT }}
+          key: hermes-${{ runner.os }}-${{ steps.image.outputs.os }}-${{ env.HERMES_COMMIT }}
 
       - name: Install Hermes build dependencies
         if: steps.hermes.outputs.cache-hit != 'true'
