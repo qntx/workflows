@@ -46,6 +46,8 @@ permissions:
 
 Language CI is `.github/workflows/ci.yml` (job id `ci`). Docs CI is `.github/workflows/ci-docs.yml` (job id `docs`). Do not put a `docs` job in `ci.yml`.
 
+In `ci-rust.yml`, `ci-bun.yml`, and `ci-wasm.yml` the gates run independently: each gate still runs when an earlier gate failed (but not when the run is cancelled), the job fails if any gate failed, and the final `Gates` step lists per-gate pass/fail/skip results in the step summary. A setup failure still stops the job before the gates run. Dependent steps keep their prerequisites, so they are skipped when the step they consume failed — build → test in `ci-rust` and `ci-bun`, and the `build:wasm` → dist check → `test:wasm`/`bench:wasm` chain in `ci-wasm`.
+
 `ci-go.yml` `golangci-lint-version` must be `v2.N`, `v2.N.M`, or `latest`. Do not pass `v2`.
 
 `ci-bun.yml` Test runs `bun run test` when `scripts.test` is defined; otherwise it falls back to a three-level file heuristic plus `bun test`. The heuristic cannot see monorepo tests (`packages/*/tests/*`) and would silently run a different runner than a declared `test` script, so declare `test` explicitly.

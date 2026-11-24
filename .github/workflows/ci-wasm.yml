@@ -126,21 +126,6 @@ jobs:
           dist-export: ${{ inputs.dist-export }}
           cache-key: wasm32
 
-      - name: Format
-        if: ${{ inputs.rust-checks }}
-        working-directory: ${{ inputs.cargo-directory }}
-        run: cargo fmt --all --check
-
-      - name: Clippy
-        if: ${{ inputs.rust-checks }}
-        working-directory: ${{ inputs.cargo-directory }}
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Test
-        if: ${{ inputs.rust-checks }}
-        working-directory: ${{ inputs.cargo-directory }}
-        run: cargo test --workspace
-
       - name: Set up Bun
         if: ${{ inputs.package-manager == 'bun' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -153,7 +138,10 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
 
+      # Last setup step: a success outcome here means the whole setup chain
+      # ran clean, so the gates below key off steps.install.
       - name: Install dependencies
+        id: install
         working-directory: ${{ inputs.install-directory }}
         env:
           PM: ${{ inputs.package-manager }}
@@ -168,13 +156,37 @@ jobs:
               ;;
           esac
 
+      - name: Format
+        id: fmt
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.rust-checks }}
+        working-directory: ${{ inputs.cargo-directory }}
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        id: clippy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.rust-checks }}
+        working-directory: ${{ inputs.cargo-directory }}
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        id: test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && inputs.rust-checks }}
+        working-directory: ${{ inputs.cargo-directory }}
+        run: cargo test --workspace
+
       - name: Build wasm
+        id: build-wasm
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
         run: '"$PM" run build:wasm'
 
-      - uses: $/actions/setup-wasm
+      # The wasm chain is dependent: each step consumes the previous output.
+      - name: Check wasm dist
+        id: dist-check
+        if: ${{ !cancelled() && steps.build-wasm.outcome == 'success' }}
+        uses: $/actions/setup-wasm
         with:
           toolchain: false
           dist-check: true
@@ -184,20 +196,24 @@ jobs:
           dist-export: ${{ inputs.dist-export }}
 
       - name: Test wasm
+        id: test-wasm
+        if: ${{ !cancelled() && steps.dist-check.outcome == 'success' }}
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
         run: '"$PM" run test:wasm'
 
       - name: Bench wasm
-        if: ${{ inputs.bench }}
+        id: bench
+        if: ${{ !cancelled() && steps.dist-check.outcome == 'success' && inputs.bench }}
         working-directory: ${{ inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
         run: '"$PM" run bench:wasm'
 
       - name: Extra scripts
-        if: ${{ inputs.scripts != '' }}
+        id: scripts
+        if: ${{ !cancelled() && steps.build-wasm.outcome == 'success' && inputs.scripts != '' }}
         working-directory: ${{ inputs.scripts-directory != '' && inputs.scripts-directory || inputs.working-directory }}
         env:
           PM: ${{ inputs.package-manager }}
@@ -213,3 +229,77 @@ jobs:
             fi
             "$PM" run "$s"
           done
+
+      # Verdict step: runs even when a gate failed so the summary table and
+      # the failure annotation are always produced. Not on cancellation.
+      - name: Gates
+        id: gates
+        if: ${{ !cancelled() }}
+        env:
+          SETUP: ${{ steps.install.outcome }}
+          R_FMT: ${{ steps.fmt.outcome }}
+          R_CLIPPY: ${{ steps.clippy.outcome }}
+          R_TEST: ${{ steps.test.outcome }}
+          R_BUILD_WASM: ${{ steps.build-wasm.outcome }}
+          R_DIST: ${{ steps.dist-check.outcome }}
+          R_TEST_WASM: ${{ steps.test-wasm.outcome }}
+          R_BENCH: ${{ steps.bench.outcome }}
+          R_SCRIPTS: ${{ steps.scripts.outcome }}
+        run: |
+          set -euo pipefail
+          verdict() {
+            local failure=0 success=0 skipped=0 o
+            for o in "$@"; do
+              case "$o" in
+                failure | cancelled) failure=1 ;;
+                success) success=1 ;;
+                skipped) skipped=1 ;;
+              esac
+            done
+            if ((failure)); then
+              echo '**fail**'
+            elif ((success)); then
+              echo 'pass'
+            elif ((skipped)); then
+              echo 'skip'
+            else
+              echo 'not run'
+            fi
+          }
+          names=() results=() failed=()
+          emit() {
+            local name="$1" v
+            shift
+            v="$(verdict "$@")"
+            names+=("$name")
+            results+=("$v")
+            if [[ "$v" == '**fail**' ]]; then
+              failed+=("$name")
+            fi
+          }
+          emit fmt "$R_FMT"
+          emit clippy "$R_CLIPPY"
+          emit test "$R_TEST"
+          emit build:wasm "$R_BUILD_WASM"
+          emit dist "$R_DIST"
+          emit test:wasm "$R_TEST_WASM"
+          emit bench:wasm "$R_BENCH"
+          emit scripts "$R_SCRIPTS"
+          {
+            echo '## CI / WASM gates'
+            echo
+            if [[ "$SETUP" != success ]]; then
+              echo "Setup failed before the gates ran (install: ${SETUP:-not run})."
+              echo
+            fi
+            echo '| Gate | Result |'
+            echo '| ---- | ------ |'
+            for i in "${!names[@]}"; do
+              echo "| ${names[$i]} | ${results[$i]} |"
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
+          if ((${#failed[@]})); then
+            printf -v list '%s, ' "${failed[@]}"
+            echo "::error title=CI / WASM::failed gates: ${list%, }"
+            exit 1
+          fi

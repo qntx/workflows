@@ -1,0 +1,11 @@
+{
+  "name": "fixture-bun-gates",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "bun -e \"process.exit(1)\"",
+    "typecheck": "bun -e \"process.exit(1)\"",
+    "build": "bun build index.ts --outdir dist",
+    "test": "bun test"
+  }
+}

@@ -92,13 +92,18 @@ jobs:
             fi
           } >>"$GITHUB_STEP_SUMMARY"
 
+      # Last setup step: a success outcome here means the whole setup chain
+      # ran clean, so the gates below key off steps.install.
       - name: Install dependencies
+        id: install
         uses: $/actions/run-trusted-command
         with:
           command: ${{ inputs.install-command }}
           working-directory: ${{ inputs.working-directory }}
 
       - name: Lint
+        id: lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           set -euo pipefail
           if jq -e '.scripts.lint' package.json > /dev/null 2>&1; then
@@ -109,6 +114,8 @@ jobs:
           fi
 
       - name: Typecheck
+        id: typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           set -euo pipefail
           if jq -e '.scripts.typecheck' package.json > /dev/null 2>&1; then
@@ -119,6 +126,8 @@ jobs:
           fi
 
       - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           set -euo pipefail
           if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
@@ -128,7 +137,10 @@ jobs:
             echo '- skipped: build' >>"$GITHUB_STEP_SUMMARY"
           fi
 
+      # Test consumes the build output, so it only skips when Build failed.
       - name: Test
+        id: test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.build.outcome != 'failure' }}
         run: |
           set -euo pipefail
           # scripts.test wins: the file heuristic only searches three levels
@@ -146,7 +158,8 @@ jobs:
           fi
 
       - name: Extra scripts
-        if: ${{ inputs.scripts != '' }}
+        id: scripts
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.build.outcome != 'failure' && inputs.scripts != '' }}
         working-directory: ${{ inputs.scripts-directory != '' && inputs.scripts-directory || inputs.working-directory }}
         env:
           SCRIPTS: ${{ inputs.scripts }}
@@ -161,3 +174,71 @@ jobs:
             fi
             bun run "$s"
           done
+
+      # Verdict step: runs even when a gate failed so the summary table and
+      # the failure annotation are always produced. Not on cancellation.
+      - name: Gates
+        id: gates
+        if: ${{ !cancelled() }}
+        env:
+          SETUP: ${{ steps.install.outcome }}
+          R_LINT: ${{ steps.lint.outcome }}
+          R_TYPECHECK: ${{ steps.typecheck.outcome }}
+          R_BUILD: ${{ steps.build.outcome }}
+          R_TEST: ${{ steps.test.outcome }}
+          R_SCRIPTS: ${{ steps.scripts.outcome }}
+        run: |
+          set -euo pipefail
+          verdict() {
+            local failure=0 success=0 skipped=0 o
+            for o in "$@"; do
+              case "$o" in
+                failure | cancelled) failure=1 ;;
+                success) success=1 ;;
+                skipped) skipped=1 ;;
+              esac
+            done
+            if ((failure)); then
+              echo '**fail**'
+            elif ((success)); then
+              echo 'pass'
+            elif ((skipped)); then
+              echo 'skip'
+            else
+              echo 'not run'
+            fi
+          }
+          names=() results=() failed=()
+          emit() {
+            local name="$1" v
+            shift
+            v="$(verdict "$@")"
+            names+=("$name")
+            results+=("$v")
+            if [[ "$v" == '**fail**' ]]; then
+              failed+=("$name")
+            fi
+          }
+          emit lint "$R_LINT"
+          emit typecheck "$R_TYPECHECK"
+          emit build "$R_BUILD"
+          emit test "$R_TEST"
+          emit scripts "$R_SCRIPTS"
+          {
+            echo '## CI / Bun gates'
+            echo
+            if [[ "$SETUP" != success ]]; then
+              echo "Setup failed before the gates ran (install: ${SETUP:-not run})."
+              echo
+            fi
+            echo '| Gate | Result |'
+            echo '| ---- | ------ |'
+            for i in "${!names[@]}"; do
+              echo "| ${names[$i]} | ${results[$i]} |"
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
+          if ((${#failed[@]})); then
+            printf -v list '%s, ' "${failed[@]}"
+            echo "::error title=CI / Bun::failed gates: ${list%, }"
+            exit 1
+          fi
