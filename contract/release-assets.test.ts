@@ -266,3 +266,9 @@ test('the Package step archive rule agrees with each contract archive extension'
     expect(triple.includes('windows') ? 'zip' : 'tar.gz').toBe(archive);
   }
 });
+
+test('layout lists members for exactly the archive extensions in use', () => {
+  const contract = loadContract();
+  const exts = [...new Set(contract.targets.map((t) => t.archive))].sort();
+  expect(Object.keys(contract.layout.members).sort()).toEqual(exts);
+});

@@ -43,6 +43,10 @@ export interface Contract {
   targets: ContractTarget[];
   assets: ContractAsset[];
   rules: string[];
+  layout: {
+    description: string;
+    members: Record<string, string[]>;
+  };
   examples: {
     valid: ContractExample[];
     ignored: ContractExample[];

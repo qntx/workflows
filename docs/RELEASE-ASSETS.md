@@ -62,12 +62,13 @@ every file must parse or be `SHA256SUMS`.
 
 ## Archive layout
 
-Not part of contract version 1. `release-rust.yml` puts the binary
-(`<bin>`, or `<bin>.exe` on Windows) and any `LICENSE*` / `README*` files at
-the archive root, without a top-level directory. Hand-written pipelines
-(qntx/nosfry up to v0.4.0) wrap them in a `<bin>-<version>[-<variant>]-<target>/`
-directory, so an installer must handle both layouts until version 2 of the
-contract fixes one.
+The `layout` key lists where the binary may sit inside an archive: exactly
+one of `./<bin>` or `<stem>/<bin>` in a `.tar.gz`, and `<bin>.exe` or
+`<stem>/<bin>.exe` in a `.zip`, where `<stem>` is the archive name without
+its extension. The member must be a regular file, with no link entries,
+absolute paths or `..` components. `release-rust.yml` produces the flat form
+(the binary plus any `LICENSE*` / `README*` files at the archive root);
+hand-written pipelines such as qntx/nosfry v0.4.0 use the `<stem>/` form.
 
 ## Versioning
 
