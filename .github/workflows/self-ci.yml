@@ -529,11 +529,8 @@ jobs:
       - name: Check asset names against the contract
         run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
-  # Same tag guard as e2e-release-rust. `permissions: contents: write` only —
-  # deliberately no id-token/attestations: the tag-gated `attest` job is
-  # skipped off-tag, proving a caller without those grants can still use the
-  # workflow. `artifact-prefix: extras` keeps uploads apart from the other
-  # release calls' artifacts.
+  # Same tag guard as e2e-release-rust. `artifact-prefix: extras` keeps
+  # uploads apart from the other release calls' artifacts.
   e2e-release-rust-extras:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     uses: $/.github/workflows/release-rust.yml
@@ -548,7 +545,6 @@ jobs:
       variants: extra=--features extra
       sbom: true
       checksums-file: true
-      attest: true
       smoke-command: --version
 
   e2e-release-rust-extras-verify:

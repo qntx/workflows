@@ -347,16 +347,8 @@ Opt-in extras, all off by default so existing callers keep today's behaviour:
 - `sbom`: a CycloneDX JSON SBOM per archive named `<bin>-<version>[-<variant>]-<target>.cdx.json`.
 - `checksums-file`: an aggregate `SHA256SUMS` asset covering every archive.
 - `smoke-command`: whitespace-separated arguments (e.g. `--version`) run against every built binary before the release; a non-zero exit blocks it. Each archive is smoke-tested on a runner that can execute it — musl/gnu on `ubuntu-24.04` / `ubuntu-24.04-arm`, macOS on `macos-latest`, `x86_64-pc-windows-msvc` on `windows-latest`, `aarch64-pc-windows-msvc` on `windows-11-arm` (the x64 build runner cannot execute aarch64 binaries). `windows-11-arm` and `ubuntu-24.04-arm` are larger arm64 runners: free on public repositories, but a private repository needs them enabled in the org's billing plan.
-- `attest`: per-archive build-provenance attestations (plus an SBOM attestation per archive when `sbom` is on), in a tag-gated `attest` job.
 
-With `attest: true` the caller job must additionally grant `id-token: write` and `attestations: write`:
-
-```yaml
-permissions:
-  contents: write
-  id-token: write # only with attest: true
-  attestations: write # only with attest: true
-```
+Build-provenance attestations are not an input: GitHub validates the permissions of every job in a called workflow when the run starts, even jobs that would be skipped, so an `attest` job inside `release-rust.yml` would force `id-token: write` and `attestations: write` on every caller. Attest in the caller instead, in a job with `needs:` on the `release-rust.yml` job, downloading the `<prefix>[-<variant>]-<target>` artifacts of the same run and running `actions/attest` over the archives (with `sbom-path` for the `.cdx.json` when `sbom` is on).
 
 The `release` job publishes draft-first — draft release, all assets, then publish — which is required for GitHub immutable releases and also removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; a tag that is already published fails closed instead of mutating assets.
 

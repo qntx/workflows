@@ -61,11 +61,6 @@ on:
         required: false
         type: boolean
         default: false
-      attest:
-        description: 'Attest build provenance for every archive, plus an SBOM attestation per archive when sbom is true. The caller job must grant id-token: write and attestations: write.'
-        required: false
-        type: boolean
-        default: false
       smoke-command:
         description: 'Whitespace-separated arguments run against every built binary before the release (e.g. --version). A non-zero exit blocks the release.'
         required: false
@@ -433,76 +428,11 @@ jobs:
           # shellcheck disable=SC2086
           "$exe" $SMOKE_COMMAND
 
-  # `attest` requests id-token/attestations only when it runs — mirroring
-  # publish-container's mutually exclusive jobs — so a caller that never
-  # enables `attest` (or never pushes a tag) needs neither permission.
-  attest:
-    name: Attest ${{ matrix.variant != '' && format('{0} ', matrix.variant) || '' }}${{ matrix.target }}
-    needs: [plan, build, smoke]
-    if: ${{ !cancelled() && inputs.attest && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ inputs.artifact-prefix }}-${{ matrix.variant != '' && format('{0}-', matrix.variant) || '' }}${{ matrix.target }}
-
-      - name: Resolve archive name
-        id: archive
-        env:
-          BIN: ${{ inputs.bin }}
-          TARGET: ${{ matrix.target }}
-          VARIANT: ${{ matrix.variant }}
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" == v* ]]; then
-            ver="${GITHUB_REF_NAME#v}"
-          else
-            ver='0.0.0-dev'
-          fi
-          stem="$BIN-$ver${VARIANT:+-$VARIANT}-$TARGET"
-          if [[ "$TARGET" == *windows* ]]; then
-            archive="$stem.zip"
-          else
-            archive="$stem.tar.gz"
-          fi
-          if [[ ! -f "$archive" ]]; then
-            echo "::error::archive not found: ${archive}"
-            exit 1
-          fi
-          {
-            echo "archive=$archive"
-            echo "sbom=$stem.cdx.json"
-          } >>"$GITHUB_OUTPUT"
-
-      - name: Attest build provenance
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: ${{ steps.archive.outputs.archive }}
-
-      - name: Attest SBOM
-        if: inputs.sbom
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        with:
-          subject-path: ${{ steps.archive.outputs.archive }}
-          sbom-path: ${{ steps.archive.outputs.sbom }}
-
   release:
-    needs: [build, smoke, attest]
+    needs: [build, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped') && (needs.attest.result == 'success' || needs.attest.result == 'skipped') }}
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped') }}
     permissions:
       contents: write
     outputs:
