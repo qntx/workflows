@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `ci-bun.yml`: `node-version-file` (installs Node via `actions/setup-node` from a `.node-version`-style path relative to the repository root, after Bun) and `require-clean-tree` (a `clean-tree` gate after Extra scripts that fails the job when a CI step leaves uncommitted changes in tracked files — the bespoke "generated files are committed" `git diff --exit-code` pattern). Both default off; `fixtures/bun` gains a deterministic `gen` script + `.node-version`, exercised by new self-CI `e2e-bun-clean-tree`.
+- `ci-bun.yml`: `node-version-file` (installs Node via `actions/setup-node` from a `.node-version`-style path relative to the repository root, after Bun) and `require-clean-tree` (a `clean-tree` gate after Extra scripts that fails the job when a CI step leaves uncommitted changes in tracked files — the bespoke "generated files are committed" `git diff --exit-code` pattern). Both default off; `fixtures/bun` gains a deterministic `gen` script + `.node-version`, exercised by new self-CI `e2e-bun-clean-tree` (#133).
 
 ### Changed
 
