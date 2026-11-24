@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `deploy-cloudflare.yml` (`Deploy / Cloudflare`): reusable `wrangler deploy` / `wrangler versions upload` with a required pinned `wrangler-version`, newline-separated `args` (never eval'd), a job-level `environment` gate, and a `dry-run` mode that bundles without credentials (PR-safe). The Cloudflare token reaches only the wrangler step and only outside dry-run; outputs `version-id`/`url` are parsed from wrangler's ND-JSON output file. Self-CI dry-runs both commands against `fixtures/cloudflare-worker`; see `examples/deploy-cloudflare.yml`.
+- `deploy-cloudflare.yml` (`Deploy / Cloudflare`): reusable `wrangler deploy` / `wrangler versions upload` with a required pinned `wrangler-version`, newline-separated `args` (never eval'd), a job-level `environment` gate, and a `dry-run` mode that bundles without credentials (PR-safe). The Cloudflare token reaches only the wrangler step and only outside dry-run; outputs `version-id`/`url` are parsed from wrangler's ND-JSON output file. Self-CI dry-runs both commands against `fixtures/cloudflare-worker`; see `examples/deploy-cloudflare.yml` (#132).
 
 ## [2.13.1] - 2026-10-26
 
