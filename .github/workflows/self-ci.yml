@@ -433,6 +433,11 @@ jobs:
           done
           echo "verified ${#sums[@]} checksum files"
 
+      # Before any archive is extracted into downloads/: every file there
+      # must be a release asset.
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
+
       # x86_64 musl runs natively on the amd64 runner; the aarch64 musl
       # archive is verified on ubuntu-24.04-arm in its own job.
       - name: Verify x86_64 musl binary is static and runs
@@ -442,9 +447,6 @@ jobs:
           tar xzf fixture-bin-0.0.0-dev-x86_64-unknown-linux-musl.tar.gz
           file fixture-bin | grep -Eq 'statically linked|static-pie linked'
           ./fixture-bin | grep -q 'fixture-bin:'
-
-      - name: Check asset names against the contract
-        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
   e2e-release-rust-musl-arm-verify:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
