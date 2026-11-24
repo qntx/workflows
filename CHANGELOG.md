@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `contract/release-assets.json` and `contract/release-assets.ts`: the machine-readable naming contract for the GitHub Release assets `release-rust.yml` publishes — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — with a reference parser, a `check` / `triples` CLI, and [docs/RELEASE-ASSETS.md](docs/RELEASE-ASSETS.md). Inside-namespace names that do not parse are loud drift, not skippable extras. A `layout` key lists the allowed binary locations inside an archive (`./<bin>` or `<stem>/<bin>`). qntx/sh vendors the file byte-for-byte (#129).
 - `self-ci.yml`: the `tests` job typechecks and unit-tests the contract, including a drift guard that asserts `release-rust.yml`'s plan case-arm triples, `targets` description, and Package-step archive-extension rule cannot drift from the contract; `e2e-release-rust-verify` and `e2e-release-rust-targets-verify` now run the contract `check` CLI over every downloaded release asset (#129).
+- `self-health.yml` (`Self / Health`): scheduled scan (`23 5 * * *`, `workflow_dispatch` with a `dry-run` input) that maintains one `Org health` issue listing the active workflows whose latest completed `push`/`schedule` run on the default branch is failing, with consecutive-failure counts and links to the newest failing run (#130).
 
 ### Changed
 

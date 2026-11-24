@@ -159,6 +159,13 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
           bun test
+      - name: Install and test org-health
+        working-directory: actions/org-health
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
 
   docs:
     uses: $/.github/workflows/ci-docs.yml
