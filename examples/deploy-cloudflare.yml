@@ -1,0 +1,41 @@
+# Caller owns on:. Pin at @v2.
+# Pull requests dry-run (no Cloudflare credentials needed); pushes to main
+# deploy behind the `production` environment's approvals and env-scoped token.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    if: github.event_name == 'pull_request'
+    uses: qntx/workflows/.github/workflows/deploy-cloudflare.yml@v2
+    permissions:
+      contents: read
+    with:
+      working-directory: apps/gateway
+      wrangler-version: 4.164.0
+      dry-run: true
+      build-command: bun run build
+
+  deploy:
+    if: github.event_name == 'push'
+    uses: qntx/workflows/.github/workflows/deploy-cloudflare.yml@v2
+    permissions:
+      contents: read
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    with:
+      working-directory: apps/gateway
+      wrangler-version: 4.164.0
+      environment: production
+      build-command: bun run build
+      args: |
+        --env
+        production
