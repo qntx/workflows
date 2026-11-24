@@ -23,6 +23,7 @@ updates:
     directories:
       - '/'
       - '/actions/validate-docs-tree'
+      - '/actions/org-health'
     schedule:
       interval: 'weekly'
     cooldown:
