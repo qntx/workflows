@@ -83,8 +83,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     env:
       CARGO_TERM_COLOR: always
-      # cargo-hack 0.6.45 (released 2026-05-30): newest release when pinned.
-      CARGO_HACK_VERSION: '0.6.45'
+      # cargo-hack 0.6.46 (released 2026-11-01): newest release when pinned.
+      CARGO_HACK_VERSION: '0.6.46'
       FEATURES: ${{ inputs.features }}
       DENY: ${{ inputs.deny }}
       DENY_ARGS: ${{ inputs.deny-args }}
@@ -115,7 +115,23 @@ jobs:
             echo "- deny: ${DENY}"
           } >>"$GITHUB_STEP_SUMMARY"
 
+      - name: Require Linux for cargo-deny
+        if: ${{ inputs.deny }}
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS}" != Linux ]; then
+            echo '::error::cargo-deny requires a Linux runner (Docker action)'
+            exit 1
+          fi
+          if ! [[ "$DENY_ARGS" =~ ^[A-Za-z0-9_:,./[:space:]-]*$ ]]; then
+            echo '::error::deny-args charset'
+            exit 1
+          fi
+
+      # Last setup step: a success outcome here means the whole setup chain
+      # ran clean, so the gates below key off steps.preflight.
       - name: Check feature flags
+        id: preflight
         run: |
           set -euo pipefail
           rest=''
@@ -145,21 +161,9 @@ jobs:
             fi
           done
 
-      - name: Require Linux for cargo-deny
-        if: ${{ inputs.deny }}
-        run: |
-          set -euo pipefail
-          if [ "${RUNNER_OS}" != Linux ]; then
-            echo '::error::cargo-deny requires a Linux runner (Docker action)'
-            exit 1
-          fi
-          if ! [[ "$DENY_ARGS" =~ ^[A-Za-z0-9_:,./[:space:]-]*$ ]]; then
-            echo '::error::deny-args charset'
-            exit 1
-          fi
-
       - name: Deny
-        if: ${{ inputs.deny }}
+        id: deny
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && inputs.deny }}
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check
@@ -167,9 +171,13 @@ jobs:
           manifest-path: ${{ inputs.working-directory }}/Cargo.toml
 
       - name: Format
+        id: fmt
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' }}
         run: cargo fmt --all --check
 
       - name: Clippy
+        id: clippy
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' }}
         run: |
           set -euo pipefail
           # word-split is intentional
@@ -183,6 +191,8 @@ jobs:
           fi
 
       - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' }}
         run: |
           set -euo pipefail
           # word-split is intentional
@@ -196,6 +206,8 @@ jobs:
           fi
 
       - name: Test
+        id: test
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && steps.build.outcome == 'success' }}
         run: |
           set -euo pipefail
           # word-split is intentional
@@ -209,13 +221,15 @@ jobs:
           fi
 
       - name: Install cargo-hack
-        if: ${{ inputs.each-feature }}
+        id: cargo-hack
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && inputs.each-feature }}
         run: |
           set -euo pipefail
           cargo install cargo-hack --locked --version "$CARGO_HACK_VERSION"
 
       - name: Each feature
-        if: ${{ inputs.each-feature }}
+        id: each-feature
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && inputs.each-feature && steps.cargo-hack.outcome == 'success' }}
         run: |
           set -euo pipefail
           # word-split is intentional: whitespace-separated package names
@@ -229,7 +243,8 @@ jobs:
           fi
 
       - name: Doc
-        if: ${{ inputs.doc }}
+        id: doc
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && inputs.doc }}
         env:
           RUSTDOCFLAGS: -D warnings
         run: |
@@ -245,5 +260,80 @@ jobs:
           fi
 
       - name: Package check
-        if: ${{ inputs.package-check }}
+        id: package-check
+        if: ${{ !cancelled() && steps.preflight.outcome == 'success' && inputs.package-check }}
         run: cargo publish --workspace --dry-run --locked
+
+      # Verdict step: runs even when a gate failed so the summary table and
+      # the failure annotation are always produced. Not on cancellation.
+      - name: Gates
+        id: gates
+        if: ${{ !cancelled() }}
+        env:
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          R_DENY: ${{ steps.deny.outcome }}
+          R_FMT: ${{ steps.fmt.outcome }}
+          R_CLIPPY: ${{ steps.clippy.outcome }}
+          R_BUILD: ${{ steps.build.outcome }}
+          R_TEST: ${{ steps.test.outcome }}
+          R_HACK: ${{ steps.cargo-hack.outcome }}
+          R_EACH_FEATURE: ${{ steps.each-feature.outcome }}
+          R_DOC: ${{ steps.doc.outcome }}
+          R_PACKAGE: ${{ steps.package-check.outcome }}
+        run: |
+          set -euo pipefail
+          verdict() {
+            local failure=0 success=0 skipped=0 o
+            for o in "$@"; do
+              case "$o" in
+                failure | cancelled) failure=1 ;;
+                success) success=1 ;;
+                skipped) skipped=1 ;;
+              esac
+            done
+            if ((failure)); then
+              echo '**fail**'
+            elif ((success)); then
+              echo 'pass'
+            elif ((skipped)); then
+              echo 'skip'
+            else
+              echo 'not run'
+            fi
+          }
+          names=() results=() failed=()
+          emit() {
+            local name="$1" v
+            shift
+            v="$(verdict "$@")"
+            names+=("$name")
+            results+=("$v")
+            if [[ "$v" == '**fail**' ]]; then
+              failed+=("$name")
+            fi
+          }
+          emit deny "$R_DENY"
+          emit fmt "$R_FMT"
+          emit clippy "$R_CLIPPY"
+          emit build/test "$R_BUILD" "$R_TEST"
+          emit each-feature "$R_HACK" "$R_EACH_FEATURE"
+          emit doc "$R_DOC"
+          emit package-check "$R_PACKAGE"
+          {
+            echo '## CI / Rust gates'
+            echo
+            if [[ "$PREFLIGHT" != success ]]; then
+              echo "Setup failed before the gates ran (preflight: ${PREFLIGHT:-not run})."
+              echo
+            fi
+            echo '| Gate | Result |'
+            echo '| ---- | ------ |'
+            for i in "${!names[@]}"; do
+              echo "| ${names[$i]} | ${results[$i]} |"
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
+          if ((${#failed[@]})); then
+            printf -v list '%s, ' "${failed[@]}"
+            echo "::error title=CI / Rust::failed gates: ${list%, }"
+            exit 1
+          fi

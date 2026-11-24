@@ -15,10 +15,10 @@ concurrency:
 env:
   ACTIONLINT_VERSION: '1.7.12'
   ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
-  ZIZMOR_VERSION: '1.30.1'
-  ZIZMOR_SHA256: 'e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a'
-  PINACT_VERSION: '5.0.0'
-  PINACT_SHA256: 'd005bbb85da80dacdc07816f24a5da723a9f6d1e9f3d3e7e73df33f9caa1358f'
+  ZIZMOR_VERSION: '1.32.0'
+  ZIZMOR_SHA256: 'bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b'
+  PINACT_VERSION: '5.0.2'
+  PINACT_SHA256: '7f003d8f51e984c2264d2009d430e3e0e87ae404a0e2dc2a9a277b0f731bf5b7'
 
 jobs:
   actionlint:
@@ -159,6 +159,13 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
           bun test
+      - name: Install and test org-health
+        working-directory: actions/org-health
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
 
   docs:
     uses: $/.github/workflows/ci-docs.yml
@@ -210,6 +217,114 @@ jobs:
       working-directory: fixtures/bun
       rust: true
       scripts: test:rust
+
+  # The e2e-*-gates jobs below are expected to fail on purpose (their
+  # fixtures trip two gates each), so they only run on pull_request events
+  # that touch the gate-relevant paths — a red called job would otherwise
+  # make every routine Self / CI run red.
+  gates-changed:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changed: ${{ steps.changed.outputs.changed }}
+    steps:
+      - name: Detect gate-relevant changes
+        id: changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files="$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')"
+          changed=false
+          while IFS= read -r f; do
+            if [[ "$f" =~ ^\.github/workflows/(ci-rust|ci-bun|ci-wasm)\.yml$ || "$f" =~ ^fixtures/(rust-gates|bun-gates|gates)/ ]]; then
+              changed=true
+              break
+            fi
+          done <<<"$files"
+          echo "changed=$changed" >>"$GITHUB_OUTPUT"
+
+  # Expected to fail: fixtures/rust-gates trips Deny and Clippy on purpose.
+  e2e-rust-gates:
+    needs: gates-changed
+    if: ${{ needs.gates-changed.outputs.changed == 'true' }}
+    uses: $/.github/workflows/ci-rust.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/rust-gates
+      deny: true
+      doc: true
+
+  e2e-rust-gates-verify:
+    needs: [gates-changed, e2e-rust-gates]
+    if: ${{ !cancelled() && needs.gates-changed.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - name: Assert gate outcomes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          bash fixtures/gates/assert-gates.sh \
+            'e2e-rust-gates / ci' \
+            Deny=failure Format=success Clippy=failure \
+            Build=success Test=success Doc=success Gates=failure \
+            --annotation 'failed gates: deny, clippy'
+
+  # Expected to fail: fixtures/bun-gates trips Lint and Typecheck on purpose.
+  e2e-bun-gates:
+    needs: gates-changed
+    if: ${{ needs.gates-changed.outputs.changed == 'true' }}
+    uses: $/.github/workflows/ci-bun.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/bun-gates
+
+  e2e-bun-gates-verify:
+    needs: [gates-changed, e2e-bun-gates]
+    if: ${{ !cancelled() && needs.gates-changed.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - name: Assert gate outcomes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          bash fixtures/gates/assert-gates.sh \
+            'e2e-bun-gates / ci' \
+            Lint=failure Typecheck=failure Build=success \
+            Test=success Gates=failure \
+            --annotation 'failed gates: lint, typecheck'
 
   e2e-fuzz:
     uses: $/.github/workflows/ci-rust-fuzz.yml
@@ -529,6 +644,31 @@ jobs:
       - name: Check asset names against the contract
         run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
+  # dry-run only: no secrets, no Cloudflare account is touched.
+  e2e-deploy-cloudflare:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      dry-run: true
+      build-command: bun run build
+
+  e2e-deploy-cloudflare-versions:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      command: versions upload
+      args: |
+        --message
+        dry run from self-ci
+      dry-run: true
+      build-command: bun run build
+
   # Same tag guard as e2e-release-rust. `artifact-prefix: extras` keeps
   # uploads apart from the other release calls' artifacts.
   e2e-release-rust-extras:
@@ -659,6 +799,11 @@ jobs:
         e2e-rust-each-feature,
         e2e-bun,
         e2e-bun-rust,
+        gates-changed,
+        e2e-rust-gates,
+        e2e-rust-gates-verify,
+        e2e-bun-gates,
+        e2e-bun-gates-verify,
         e2e-fuzz,
         e2e-wasm,
         e2e-wasm-scripts-dir,
@@ -677,6 +822,8 @@ jobs:
         e2e-release-rust-musl-arm-verify,
         e2e-release-rust-targets,
         e2e-release-rust-targets-verify,
+        e2e-deploy-cloudflare,
+        e2e-deploy-cloudflare-versions,
         e2e-release-rust-extras,
         e2e-release-rust-extras-verify,
       ]
@@ -703,6 +850,7 @@ jobs:
           || needs.e2e-fuzz.result != 'success'
           || needs.e2e-wasm.result != 'success'
           || needs.e2e-wasm-scripts-dir.result != 'success'
+          || needs.e2e-wasm-c.result != 'success'
           || needs.e2e-cross.result != 'success'
           || needs.e2e-cross-features.result != 'success'
           || needs.e2e-publish-crates.result != 'success'
@@ -716,8 +864,60 @@ jobs:
           || needs.e2e-release-rust-musl-arm-verify.result != 'success'
           || needs.e2e-release-rust-targets.result != 'success'
           || needs.e2e-release-rust-targets-verify.result != 'success'
+          || needs.e2e-deploy-cloudflare.result != 'success'
+          || needs.e2e-deploy-cloudflare-versions.result != 'success'
           || needs.e2e-release-rust-extras.result != 'success'
           || needs.e2e-release-rust-extras-verify.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1
+
+      # The e2e-*-gates jobs are expected to fail on the PRs that exercise
+      # them; their verify jobs prove the intended gates went red.
+      - name: Require expected gate failures
+        env:
+          GATES_CHANGED_RESULT: ${{ needs.gates-changed.result }}
+          GATES_CHANGED: ${{ needs.gates-changed.outputs.changed }}
+          RUST_GATES_RESULT: ${{ needs.e2e-rust-gates.result }}
+          RUST_GATES_VERIFY_RESULT: ${{ needs.e2e-rust-gates-verify.result }}
+          BUN_GATES_RESULT: ${{ needs.e2e-bun-gates.result }}
+          BUN_GATES_VERIFY_RESULT: ${{ needs.e2e-bun-gates-verify.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$GATES_CHANGED_RESULT" != success && "$GATES_CHANGED_RESULT" != skipped ]]; then
+            echo "::error::gates-changed: expected success or skipped, got $GATES_CHANGED_RESULT"
+            exit 1
+          fi
+          ok=true
+          if [[ "$GATES_CHANGED" == 'true' ]]; then
+            [[ "$RUST_GATES_RESULT" == failure ]] || {
+              echo "::error::e2e-rust-gates: expected failure, got $RUST_GATES_RESULT"
+              ok=false
+            }
+            [[ "$BUN_GATES_RESULT" == failure ]] || {
+              echo "::error::e2e-bun-gates: expected failure, got $BUN_GATES_RESULT"
+              ok=false
+            }
+            [[ "$RUST_GATES_VERIFY_RESULT" == success ]] || {
+              echo "::error::e2e-rust-gates-verify: expected success, got $RUST_GATES_VERIFY_RESULT"
+              ok=false
+            }
+            [[ "$BUN_GATES_VERIFY_RESULT" == success ]] || {
+              echo "::error::e2e-bun-gates-verify: expected success, got $BUN_GATES_VERIFY_RESULT"
+              ok=false
+            }
+          else
+            for spec in \
+              "e2e-rust-gates:$RUST_GATES_RESULT" \
+              "e2e-rust-gates-verify:$RUST_GATES_VERIFY_RESULT" \
+              "e2e-bun-gates:$BUN_GATES_RESULT" \
+              "e2e-bun-gates-verify:$BUN_GATES_VERIFY_RESULT"; do
+              name="${spec%%:*}"
+              res="${spec#*:}"
+              [[ "$res" == skipped ]] || {
+                echo "::error::$name: expected skipped, got $res"
+                ok=false
+              }
+            done
+          fi
+          [[ "$ok" == true ]] || exit 1

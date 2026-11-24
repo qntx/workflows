@@ -1,0 +1,263 @@
+name: Deploy / Cloudflare
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner label.'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      timeout-minutes:
+        description: 'Job timeout.'
+        required: false
+        type: number
+        default: 15
+      working-directory:
+        description: 'Wrangler project directory relative to the repository root. Jailed inside the workspace.'
+        required: false
+        type: string
+        default: '.'
+      wrangler-version:
+        description: 'Exact wrangler version to install (X.Y.Z).'
+        required: true
+        type: string
+      command:
+        description: 'Wrangler command to run: deploy or versions upload.'
+        required: false
+        type: string
+        default: 'deploy'
+      args:
+        description: 'Newline-separated extra wrangler arguments, one argv element per line. Blank lines are ignored; --dry-run and --outdir are managed by this workflow and are rejected here.'
+        required: false
+        type: string
+        default: ''
+      environment:
+        description: 'GitHub environment for approvals and environment-scoped secrets. Empty = none.'
+        required: false
+        type: string
+        default: ''
+      build-command:
+        description: 'Shell command to build before deploying (trusted source; runs via $/actions/run-trusted-command).'
+        required: false
+        type: string
+        default: ''
+      build-directory:
+        description: 'Directory to run build-command in, relative to the repository root. Falls back to working-directory; monorepos install/build at the root.'
+        required: false
+        type: string
+        default: ''
+      bun-version:
+        description: 'Bun version to install. Empty skips Bun setup.'
+        required: false
+        type: string
+        default: '1.4'
+      node-version:
+        description: 'Node version for wrangler.'
+        required: false
+        type: string
+        default: '24'
+      dry-run:
+        description: 'Run wrangler with --dry-run: bundles and validates without deploying. No Cloudflare credentials are used.'
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: 'Branch, tag or SHA to checkout. Needed by callers triggered from workflow_run, where github.sha is the default-branch head rather than the commit CI passed.'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: 'Cloudflare API token. Required unless dry-run.'
+        required: false
+      CLOUDFLARE_ACCOUNT_ID:
+        description: 'Cloudflare account id (optional; needed when the token can see multiple accounts).'
+        required: false
+    outputs:
+      version-id:
+        description: 'Deployed worker version id. Empty in dry-run or when wrangler does not report it.'
+        value: ${{ jobs.deploy.outputs.version-id }}
+      url:
+        description: 'First deployment target (deploy) or preview_url (versions upload). Empty in dry-run or when wrangler does not report it.'
+        value: ${{ jobs.deploy.outputs.url }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qntx-workflows-deploy-cloudflare-${{ github.repository }}-${{ github.workflow }}-${{ inputs.working-directory }}-${{ inputs.dry-run && github.ref || inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    outputs:
+      version-id: ${{ steps.wrangler.outputs.version-id }}
+      url: ${{ steps.wrangler.outputs.url }}
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref }}
+
+      - name: Validate inputs
+        env:
+          WORK_DIR: ${{ inputs.working-directory }}
+          BUILD_DIR: ${{ inputs.build-directory }}
+          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          # Only whether the token is set; the value never reaches this step.
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::wrangler-version must be X.Y.Z, got: ${WRANGLER_VERSION}"
+            exit 1
+          fi
+          case "$COMMAND" in
+            deploy | 'versions upload') ;;
+            *)
+              echo "::error::command must be 'deploy' or 'versions upload', got: ${COMMAND}"
+              exit 1
+              ;;
+          esac
+          for d in "$WORK_DIR" "$BUILD_DIR"; do
+            if [[ -n "$d" ]] && ! [[ "$d" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::error::directory charset: ${d}"
+              exit 1
+            fi
+          done
+          root="$(realpath "$GITHUB_WORKSPACE")"
+          # Prefix check, not a glob: realpath collapses `..` segments.
+          for d in "$WORK_DIR" "${BUILD_DIR:-$WORK_DIR}"; do
+            if ! dir="$(realpath "$root/$d")"; then
+              echo "::error::directory does not exist: ${d}"
+              exit 1
+            fi
+            if [ "$dir" != "$root" ] && [ "${dir#"$root"/}" = "$dir" ]; then
+              echo "::error::directory escapes workspace: ${dir}"
+              exit 1
+            fi
+          done
+          while IFS= read -r line; do
+            [[ -z "${line//[[:space:]]/}" ]] && continue
+            if [[ "$line" =~ [[:cntrl:]] ]]; then
+              echo "::error::args contains a control character: ${line}"
+              exit 1
+            fi
+            case "$line" in
+              --dry-run | --dry-run=* | --outdir | --outdir=*)
+                echo "::error::args may not set ${line%%=*}; dry-run owns it"
+                exit 1
+                ;;
+            esac
+          done <<<"$ARGS"
+          if [[ "$DRY_RUN" != 'true' && "$HAS_TOKEN" != 'true' ]]; then
+            echo '::error::CLOUDFLARE_API_TOKEN is required unless dry-run'
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: ${{ inputs.bun-version != '' }}
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # wrangler-version is caller-pinned and verified by `wrangler --version` below.
+      - name: Install wrangler # zizmor: ignore[adhoc-packages]
+        env:
+          WRANGLER_VERSION: ${{ inputs.wrangler-version }}
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts "wrangler@$WRANGLER_VERSION"
+          wrangler --version | grep -F "$WRANGLER_VERSION"
+
+      - name: Build
+        if: ${{ inputs.build-command != '' }}
+        uses: $/actions/run-trusted-command
+        with:
+          command: ${{ inputs.build-command }}
+          working-directory: ${{ inputs.build-directory != '' && inputs.build-directory || inputs.working-directory }}
+
+      # The Cloudflare token and account id reach this step only outside
+      # dry-run. Never set -x and never print the environment here.
+      - name: wrangler
+        id: wrangler
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_API_TOKEN: ${{ !inputs.dry-run && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ !inputs.dry-run && secrets.CLOUDFLARE_ACCOUNT_ID || '' }}
+          OUT_FILE: ${{ runner.temp }}/wrangler-output.ndjson
+          OUT_DIR: ${{ runner.temp }}/wrangler-dry-run
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.ndjson
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r line; do
+            [[ -z "${line//[[:space:]]/}" ]] && continue
+            args+=("$line")
+          done <<<"$ARGS"
+          # command is exactly 'deploy' or 'versions upload' (validated).
+          read -ra sub <<<"$COMMAND"
+          cmd=(wrangler "${sub[@]}")
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            cmd+=(--dry-run --outdir "$OUT_DIR")
+          fi
+          cmd+=("${args[@]}")
+          "${cmd[@]}"
+
+          version_id=''
+          url=''
+          if [[ -s "$OUT_FILE" ]]; then
+            case "$COMMAND" in
+              deploy)
+                version_id="$(jq -sr '[.[] | select(.type == "deploy") | .version_id // empty] | last // ""' "$OUT_FILE")"
+                url="$(jq -sr '[.[] | select(.type == "deploy") | .targets[0] // empty] | last // ""' "$OUT_FILE")"
+                ;;
+              'versions upload')
+                version_id="$(jq -sr '[.[] | select(.type == "version-upload") | .version_id // empty] | last // ""' "$OUT_FILE")"
+                url="$(jq -sr '[.[] | select(.type == "version-upload") | .preview_url // empty] | last // ""' "$OUT_FILE")"
+                ;;
+            esac
+          fi
+          {
+            echo "version-id=$version_id"
+            echo "url=$url"
+          } >>"$GITHUB_OUTPUT"
+
+          if [[ "$DRY_RUN" == 'true' ]]; then
+            if [[ ! -d "$OUT_DIR" ]] || [[ -z "$(ls -A "$OUT_DIR")" ]]; then
+              echo '::error::dry run produced an empty output directory'
+              exit 1
+            fi
+            {
+              echo '### Dry run bundle'
+              echo ''
+              echo '```'
+              du -h "$OUT_DIR"/*
+              echo '```'
+            } >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+          {
+            echo "### wrangler ${COMMAND}"
+            echo ''
+            echo "- environment: ${ENVIRONMENT:-<none>}"
+            echo "- version id: ${version_id:-<none>}"
+            echo "- url: ${url:-<none>}"
+          } >>"$GITHUB_STEP_SUMMARY"
