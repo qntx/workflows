@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `ci-go.yml` `golangci-lint-version` default `v2.13` → `v2.15` (golangci-lint v2.15.0, released 2026-10-16). Callers that pass the input are unaffected (#128).
+- `ci-rust.yml` `each-feature` installs cargo-hack 0.6.46 (released 2026-11-01) instead of 0.6.45 (#128).
+- Self-CI tooling: zizmor 1.30.1 → 1.32.0 (released 2026-11-02), pinact 5.0.0 → 5.0.2 (released 2026-10-25), both with updated archive SHA-256s. Newer zizmor 1.33.x is younger than the 7-day adoption window (#128).
+
 ## [2.13.1] - 2026-10-26
 
 ### Fixed
