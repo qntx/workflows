@@ -152,6 +152,13 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
           bun test
+      - name: Install and test release-assets contract
+        working-directory: contract
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
 
   docs:
     uses: $/.github/workflows/ci-docs.yml
@@ -392,6 +399,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Download dist artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -430,6 +442,9 @@ jobs:
           tar xzf fixture-bin-0.0.0-dev-x86_64-unknown-linux-musl.tar.gz
           file fixture-bin | grep -Eq 'statically linked|static-pie linked'
           ./fixture-bin | grep -q 'fixture-bin:'
+
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
   e2e-release-rust-musl-arm-verify:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -476,6 +491,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Download dist artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -503,6 +523,9 @@ jobs:
             sha256sum -c "$f"
           done
           echo "asset set matches the targets input"
+
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
   scorecard:
     runs-on: ubuntu-latest

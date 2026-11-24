@@ -1,0 +1,512 @@
+{
+  "contract": "qntx/release-assets",
+  "version": 1,
+  "description": "Producer-side naming contract for GitHub Release assets published by qntx/workflows release-rust.yml and parsed by installers such as qntx/sh. Parse a name only together with the expected <bin> and <version> (the tag without its leading v).",
+  "grammar": "<bin>-<version>[-<variant>]-<target>.<ext>",
+  "patterns": {
+    "bin": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+    "version": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$",
+    "variant": "^[a-z][a-z0-9]*$"
+  },
+  "targets": [
+    {
+      "triple": "x86_64-unknown-linux-gnu",
+      "archive": "tar.gz"
+    },
+    {
+      "triple": "aarch64-unknown-linux-gnu",
+      "archive": "tar.gz"
+    },
+    {
+      "triple": "x86_64-unknown-linux-musl",
+      "archive": "tar.gz"
+    },
+    {
+      "triple": "aarch64-unknown-linux-musl",
+      "archive": "tar.gz"
+    },
+    {
+      "triple": "aarch64-apple-darwin",
+      "archive": "tar.gz"
+    },
+    {
+      "triple": "x86_64-pc-windows-msvc",
+      "archive": "zip"
+    },
+    {
+      "triple": "aarch64-pc-windows-msvc",
+      "archive": "zip"
+    }
+  ],
+  "assets": [
+    {
+      "kind": "archive",
+      "name": "<bin>-<version>[-<variant>]-<target>.<archive>",
+      "required": true,
+      "description": "Installable archive; <archive> is the target's archive extension."
+    },
+    {
+      "kind": "sha256",
+      "name": "<bin>-<version>[-<variant>]-<target>.<archive>.sha256",
+      "required": true,
+      "description": "Required for every archive: one line, 64 lowercase hex digits, two spaces, the bare archive name, newline (sha256sum text mode)."
+    },
+    {
+      "kind": "sbom",
+      "name": "<bin>-<version>[-<variant>]-<target>.cdx.json",
+      "required": false,
+      "description": "Optional CycloneDX JSON SBOM of the binary in the matching archive."
+    },
+    {
+      "kind": "aggregate",
+      "name": "SHA256SUMS",
+      "required": false,
+      "description": "Optional; outside the <bin>-<version>- namespace. One sha256sum text-mode line per archive."
+    }
+  ],
+  "rules": [
+    "SHA256SUMS is the aggregate checksum file.",
+    "Any other name that does not start with '<bin>-<version>-' is outside the namespace and is ignored.",
+    "Inside the namespace, strip the '<bin>-<version>-' prefix, then the suffix: '.cdx.json' (sbom), '.<archive>.sha256' (sha256) or '.<archive>' (archive).",
+    "The remaining stem must be '<target>' or '<variant>-<target>', where <target> is a listed triple matched as a suffix and <variant> matches patterns.variant.",
+    "<archive> must be the extension listed for that target.",
+    "A name inside the namespace that does not parse is naming drift: fail loudly rather than skip it."
+  ],
+  "examples": {
+    "valid": [
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-apple-darwin.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-apple-darwin",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-apple-darwin.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-apple-darwin",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-apple-darwin.cdx.json",
+        "kind": "sbom",
+        "target": "aarch64-apple-darwin",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-aarch64-unknown-linux-gnu.cdx.json",
+        "kind": "sbom",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.cdx.json",
+        "kind": "sbom",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-apple-darwin.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-apple-darwin",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-apple-darwin.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-apple-darwin",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-apple-darwin.cdx.json",
+        "kind": "sbom",
+        "target": "aarch64-apple-darwin",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-aarch64-unknown-linux-gnu.cdx.json",
+        "kind": "sbom",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-x86_64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-x86_64-unknown-linux-gnu.cdx.json",
+        "kind": "sbom",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": "onion"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "SHA256SUMS",
+        "kind": "aggregate",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-unknown-linux-gnu.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-unknown-linux-musl.tar.gz",
+        "kind": "archive",
+        "target": "x86_64-unknown-linux-musl",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-unknown-linux-musl.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "x86_64-unknown-linux-musl",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-unknown-linux-musl.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-unknown-linux-musl",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-unknown-linux-musl.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-unknown-linux-musl",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-apple-darwin.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-apple-darwin",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-apple-darwin.tar.gz.sha256",
+        "kind": "sha256",
+        "target": "aarch64-apple-darwin",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-pc-windows-msvc.zip",
+        "kind": "archive",
+        "target": "x86_64-pc-windows-msvc",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-x86_64-pc-windows-msvc.zip.sha256",
+        "kind": "sha256",
+        "target": "x86_64-pc-windows-msvc",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-pc-windows-msvc.zip",
+        "kind": "archive",
+        "target": "aarch64-pc-windows-msvc",
+        "variant": null
+      },
+      {
+        "bin": "kobe",
+        "version": "7.0.0",
+        "name": "kobe-7.0.0-aarch64-pc-windows-msvc.zip.sha256",
+        "kind": "sha256",
+        "target": "aarch64-pc-windows-msvc",
+        "variant": null
+      },
+      {
+        "bin": "fixture-bin",
+        "version": "0.0.0-dev",
+        "name": "fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu.tar.gz",
+        "kind": "archive",
+        "target": "x86_64-unknown-linux-gnu",
+        "variant": null
+      },
+      {
+        "bin": "fixture-bin",
+        "version": "0.0.0-dev",
+        "name": "fixture-bin-0.0.0-dev-extra-aarch64-pc-windows-msvc.zip",
+        "kind": "archive",
+        "target": "aarch64-pc-windows-msvc",
+        "variant": "extra"
+      },
+      {
+        "bin": "fixture-bin",
+        "version": "0.0.0-dev",
+        "name": "fixture-bin-0.0.0-dev-extra-aarch64-pc-windows-msvc.zip.sha256",
+        "kind": "sha256",
+        "target": "aarch64-pc-windows-msvc",
+        "variant": "extra"
+      },
+      {
+        "bin": "fixture-bin",
+        "version": "0.0.0-dev",
+        "name": "fixture-bin-0.0.0-dev-extra-aarch64-pc-windows-msvc.cdx.json",
+        "kind": "sbom",
+        "target": "aarch64-pc-windows-msvc",
+        "variant": "extra"
+      },
+      {
+        "bin": "tool",
+        "version": "1.2.3-rc.1",
+        "name": "tool-1.2.3-rc.1-tor2-aarch64-unknown-linux-musl.tar.gz",
+        "kind": "archive",
+        "target": "aarch64-unknown-linux-musl",
+        "variant": "tor2"
+      }
+    ],
+    "ignored": [
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.3.9-x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "other version: outside the <bin>-<version>- namespace"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0.tar.gz",
+        "reason": "no '-' after <version>: outside the namespace"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "install.sh",
+        "reason": "outside the namespace"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfryd-0.4.0-x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "another binary's namespace"
+      }
+    ],
+    "invalid": [
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.tar.xz",
+        "reason": "unknown archive extension"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.tar.gz.sig",
+        "reason": "unknown sidecar"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.tar.gz.cdx.json",
+        "reason": "SBOM must be named <bin>-<version>[-<variant>]-<target>.cdx.json, not after the archive"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.cdx.json.sha256",
+        "reason": "only archives carry a .sha256 sidecar"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-riscv64gc-unknown-linux-gnu.tar.gz",
+        "reason": "unknown target triple"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gun.tar.gz",
+        "reason": "typo of a known triple"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-onion-x86_64-unknown-linux.tar.gz",
+        "reason": "variant-looking name whose target is a truncated triple"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu-aarch64-apple-darwin.tar.gz",
+        "reason": "a triple in the variant position fails the variant pattern"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-Onion-x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "variant must match ^[a-z][a-z0-9]*$"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-tor-v3-x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "variant must not contain '-'"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-1onion-x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "variant must start with a letter"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0--x86_64-unknown-linux-gnu.tar.gz",
+        "reason": "empty variant"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-pc-windows-msvc.tar.gz",
+        "reason": "Windows targets use .zip"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.zip",
+        "reason": "non-Windows targets use .tar.gz"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-pc-windows-msvc.tar.gz.sha256",
+        "reason": "checksum of an archive with the wrong extension"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu.sha256",
+        "reason": "the .sha256 sidecar is named after the archive"
+      },
+      {
+        "bin": "nosfry",
+        "version": "0.4.0",
+        "name": "nosfry-0.4.0-x86_64-unknown-linux-gnu",
+        "reason": "no extension"
+      }
+    ]
+  }
+}

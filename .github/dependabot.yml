@@ -23,6 +23,7 @@ updates:
     directories:
       - '/'
       - '/actions/validate-docs-tree'
+      - '/contract'
     schedule:
       interval: 'weekly'
     cooldown:

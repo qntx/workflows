@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `contract/release-assets.json` and `contract/release-assets.ts`: the machine-readable naming contract for the GitHub Release assets `release-rust.yml` publishes — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — with a reference parser, a `check` / `triples` CLI, and [docs/RELEASE-ASSETS.md](docs/RELEASE-ASSETS.md). Inside-namespace names that do not parse are loud drift, not skippable extras.
+- `self-ci.yml`: the `tests` job typechecks and unit-tests the contract, including a drift guard that asserts `release-rust.yml`'s plan case-arm triples, `targets` description, and Package-step archive-extension rule cannot drift from the contract; `e2e-release-rust-verify` and `e2e-release-rust-targets-verify` now run the contract `check` CLI over every downloaded release asset.
+
 ## [2.13.1] - 2026-10-26
 
 ### Fixed
