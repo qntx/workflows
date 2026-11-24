@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ci-bun.yml`: `node-version-file` (installs Node via `actions/setup-node` from a `.node-version`-style path relative to the repository root, after Bun) and `require-clean-tree` (a `clean-tree` gate after Extra scripts that fails the job when a CI step leaves uncommitted changes in tracked files — the bespoke "generated files are committed" `git diff --exit-code` pattern). Both default off; `fixtures/bun` gains a deterministic `gen` script + `.node-version`, exercised by new self-CI `e2e-bun-clean-tree`.
+
 ### Changed
 
 - `ci-rust.yml`, `ci-bun.yml`, `ci-wasm.yml`: the gates inside job `ci` now run independently — each gate runs even when an earlier gate failed (still not when the run is cancelled), and a final `Gates` step writes a per-gate `| Gate | Result |` table to the step summary and fails the job with a `failed gates: …` error annotation. Setup steps still short-circuit: when a setup step fails, no gate runs. Dependent steps keep their prerequisite and are skipped when it failed — Test requires Build in `ci-rust` and `ci-bun` (`scripts` also needs the build), and `ci-wasm` keeps the `build:wasm` → dist check → `test:wasm`/`bench:wasm` chain. The verdict for existing callers is unchanged: the job passes iff every enabled gate passes (#127).

@@ -48,6 +48,16 @@ on:
         required: false
         type: string
         default: ''
+      node-version-file:
+        description: 'Path to a .node-version-style file, relative to the repository root. When set, actions/setup-node installs that version after Bun.'
+        required: false
+        type: string
+        default: ''
+      require-clean-tree:
+        description: 'Fail the job when a CI step leaves uncommitted changes in tracked files (e.g. a forgotten generated file).'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,9 +88,27 @@ jobs:
         with:
           bun-version: ${{ inputs.bun-version }}
 
+      - name: Validate node-version-file
+        if: ${{ inputs.node-version-file != '' }}
+        env:
+          NVF: ${{ inputs.node-version-file }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$NVF" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$NVF" =~ (^|/)\.\.(/|$) ]]; then
+            echo "::error::node-version-file charset or '..' segment: ${NVF}"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        if: ${{ inputs.node-version-file != '' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+
       - name: Record toolchain
         env:
           RUST: ${{ inputs.rust }}
+          NVF: ${{ inputs.node-version-file }}
         run: |
           set -euo pipefail
           {
@@ -89,6 +117,9 @@ jobs:
             if [ "$RUST" = 'true' ]; then
               echo "- rustc: $(rustc --version)"
               echo "- cargo: $(cargo --version)"
+            fi
+            if [ -n "$NVF" ]; then
+              echo "- node: $(node --version)"
             fi
           } >>"$GITHUB_STEP_SUMMARY"
 
@@ -175,6 +206,30 @@ jobs:
             bun run "$s"
           done
 
+      # A failed generator would only add noise, so the gate requires the
+      # build and extra scripts to have at least run without failing.
+      - name: Clean tree
+        id: clean-tree
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.build.outcome != 'failure' && steps.scripts.outcome != 'failure' && inputs.require-clean-tree }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          # Tracked files only: untracked files are not considered.
+          if ! git diff --exit-code --stat; then
+            {
+              echo '### Uncommitted changes after the CI steps'
+              echo ''
+              echo '```'
+              git diff --stat
+              echo '```'
+              echo ''
+              git diff --name-only | sed 's/^/- /'
+            } >>"$GITHUB_STEP_SUMMARY"
+            n="$(git diff --name-only | wc -l | tr -d ' ')"
+            echo "::error title=CI / Bun::uncommitted changes after the CI steps: ${n} files"
+            exit 1
+          fi
+
       # Verdict step: runs even when a gate failed so the summary table and
       # the failure annotation are always produced. Not on cancellation.
       - name: Gates
@@ -187,6 +242,7 @@ jobs:
           R_BUILD: ${{ steps.build.outcome }}
           R_TEST: ${{ steps.test.outcome }}
           R_SCRIPTS: ${{ steps.scripts.outcome }}
+          R_CLEAN_TREE: ${{ steps.clean-tree.outcome }}
         run: |
           set -euo pipefail
           verdict() {
@@ -224,6 +280,7 @@ jobs:
           emit build "$R_BUILD"
           emit test "$R_TEST"
           emit scripts "$R_SCRIPTS"
+          emit clean-tree "$R_CLEAN_TREE"
           {
             echo '## CI / Bun gates'
             echo
