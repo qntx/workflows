@@ -62,13 +62,17 @@ every file must parse or be `SHA256SUMS`.
 
 ## Archive layout
 
-The `layout` key lists where the binary may sit inside an archive: exactly
-one of `./<bin>` or `<stem>/<bin>` in a `.tar.gz`, and `<bin>.exe` or
-`<stem>/<bin>.exe` in a `.zip`, where `<stem>` is the archive name without
-its extension. The member must be a regular file, with no link entries,
-absolute paths or `..` components. `release-rust.yml` produces the flat form
-(the binary plus any `LICENSE*` / `README*` files at the archive root);
-hand-written pipelines such as qntx/nosfry v0.4.0 use the `<stem>/` form.
+The `layout` key lists where the binary may sit inside an archive, where
+`<stem>` is the archive name without its extension. The flat layout —
+`./<bin>` in a `.tar.gz`, `<bin>.exe` at the root of a `.zip`, with any
+`LICENSE*` / `README*` files beside it — is what `release-rust.yml`
+produces and is the canonical form. The single-top-level-directory layout
+(`<stem>/<bin>`, `<stem>/<bin>.exe`) is accepted by consumers only for
+releases made outside `release-rust.yml`, such as qntx/nosfry v0.4.0's
+hand-written pipeline; `release-rust.yml` never emits it, and the self-CI
+drift test fails if its Package step stops producing the canonical layout.
+The binary member must be a regular file, with no link entries, absolute
+paths or `..` components.
 
 ## Versioning
 
@@ -78,8 +82,15 @@ publish assets for it — an unknown triple is drift, not a warning.
 
 ## Canonical copy
 
-This repository owns the contract. qntx/sh keeps a byte-identical copy at
-`apps/sh/contract/release-assets.json`; edit it here and sync it there.
+This repository owns the contract. `contract/release-assets.json` is
+byte-identical to qntx/sh's `apps/sh/contract/release-assets.json` — check
+with `cmp` — and `.prettierignore` excludes it from Prettier for that
+reason (Prettier would collapse the `layout.members` arrays). After editing
+here, sync there and verify:
+
+```sh
+gh api repos/qntx/sh/contents/apps/sh/contract/release-assets.json --jq .content | base64 -d | cmp - contract/release-assets.json
+```
 
 `contract/release-assets.ts` is the reference parser and CLI
 (`check --bin <bin> --version <version> <file-or-name>...`, `triples`), and
