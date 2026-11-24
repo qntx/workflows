@@ -109,3 +109,13 @@ Not a public API. Do not pin new callers here.
 | ---------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
 | `stale.yml`      | `ops-stale.yml` | Unmigrated `uses: …/stale.yml@main` (qntx-labs). Missing file made those scheduled runs fail and mail. |
 | `repo-stale.yml` | `ops-stale.yml` | Same for `uses: …/repo-stale.yml@main`.                                                                |
+
+The aliases stay because 13 qntx-labs repositories still call them at
+`@main` (12 `stale.yml`, 1 `repo-stale.yml`, found by code search on
+2026-11-24). They are removed only after every one of those callers has
+moved to `ops-stale.yml@v2` with `permissions: issues: write` +
+`pull-requests: write` (see [MIGRATION.md](MIGRATION.md)) and a fresh code
+search across qntx and qntx-labs —
+`gh search code --owner qntx-labs 'qntx/workflows/.github/workflows/stale.yml'`,
+same for `repo-stale.yml` and `--owner qntx` — returns no caller besides
+this repository.

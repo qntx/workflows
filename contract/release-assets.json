@@ -75,8 +75,14 @@
   "layout": {
     "description": "Where the binary sits inside an archive. Exactly one of the listed members must exist and be a regular file (executable in tar.gz). No link entries, no absolute paths, no '..' components. <stem> is the archive name without '.<archive>'; <bin> is the binary name (Windows adds .exe).",
     "members": {
-      "tar.gz": ["./<bin>", "<stem>/<bin>"],
-      "zip": ["<bin>.exe", "<stem>/<bin>.exe"]
+      "tar.gz": [
+        "./<bin>",
+        "<stem>/<bin>"
+      ],
+      "zip": [
+        "<bin>.exe",
+        "<stem>/<bin>.exe"
+      ]
     }
   },
   "examples": {

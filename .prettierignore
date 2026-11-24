@@ -1,0 +1,3 @@
+# Must stay byte-identical to qntx/sh's apps/sh/contract/release-assets.json;
+# Prettier would collapse the multi-line layout.members arrays.
+contract/release-assets.json
