@@ -1,0 +1,5 @@
+# Intentional failure: the fixture crate is MIT-licensed but the allowlist
+# only permits Apache-2.0, so `cargo deny --all-features check` fails the
+# Deny gate deterministically.
+[licenses]
+allow = ["Apache-2.0"]

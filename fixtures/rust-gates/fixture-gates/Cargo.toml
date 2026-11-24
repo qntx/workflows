@@ -1,0 +1,7 @@
+[package]
+name = "fixture-gates"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "self-CI fixture: fails the deny and clippy gates on purpose"
