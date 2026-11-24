@@ -218,6 +218,18 @@ jobs:
       rust: true
       scripts: test:rust
 
+  # `gen` rewrites generated.txt deterministically, so the clean-tree gate
+  # passes only if the committed copy matches what the script produces.
+  e2e-bun-clean-tree:
+    uses: $/.github/workflows/ci-bun.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/bun
+      node-version-file: fixtures/bun/.node-version
+      scripts: gen
+      require-clean-tree: true
+
   # The e2e-*-gates jobs below are expected to fail on purpose (their
   # fixtures trip two gates each), so they only run on pull_request events
   # that touch the gate-relevant paths — a red called job would otherwise
@@ -799,6 +811,7 @@ jobs:
         e2e-rust-each-feature,
         e2e-bun,
         e2e-bun-rust,
+        e2e-bun-clean-tree,
         gates-changed,
         e2e-rust-gates,
         e2e-rust-gates-verify,
@@ -847,6 +860,7 @@ jobs:
           || needs.e2e-rust-each-feature.result != 'success'
           || needs.e2e-bun.result != 'success'
           || needs.e2e-bun-rust.result != 'success'
+          || needs.e2e-bun-clean-tree.result != 'success'
           || needs.e2e-fuzz.result != 'success'
           || needs.e2e-wasm.result != 'success'
           || needs.e2e-wasm-scripts-dir.result != 'success'

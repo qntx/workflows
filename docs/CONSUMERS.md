@@ -54,6 +54,8 @@ In `ci-rust.yml`, `ci-bun.yml`, and `ci-wasm.yml` the gates run independently: e
 
 `ci-bun.yml` extra inputs for repos whose scripts drive cargo as well as bun (cross-language differential tests): `rust` (`false`; installs the toolchain via `setup-rust`, honouring `<working-directory>/rust-toolchain.toml` else `stable`, before dependency install), `scripts` (`''`; whitespace-separated package script names run with `bun run` in order after Test), `scripts-directory` (`''`; falls back to `working-directory`).
 
+`ci-bun.yml` also covers two bespoke side-jobs the org hand-rolls today — qntx/bot's `vectors` job and qntx/nostr's `wasm-artifacts` job (qntx/spark `generated` and qntx/social's check job are the same shape): `node-version-file` installs Node from a `.node-version`-style file (repo-root-relative) after Bun, and `require-clean-tree` adds a gate that runs `git diff --exit-code` over the whole worktree after the other steps — the "generated files are committed" check. Pair it with `scripts:` for the generator itself; untracked files are not considered, matching the bespoke jobs.
+
 `ci-docs.yml` callers use job id `docs`. Do not set `jobs.docs.name` or the required check is `Docs / ci`. Pin `@v2`. Copy `examples/ci-docs.yml`.
 
 ```yaml
