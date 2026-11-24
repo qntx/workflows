@@ -83,8 +83,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     env:
       CARGO_TERM_COLOR: always
-      # cargo-hack 0.6.45 (released 2026-05-30): newest release when pinned.
-      CARGO_HACK_VERSION: '0.6.45'
+      # cargo-hack 0.6.46 (released 2026-11-01): newest release when pinned.
+      CARGO_HACK_VERSION: '0.6.46'
       FEATURES: ${{ inputs.features }}
       DENY: ${{ inputs.deny }}
       DENY_ARGS: ${{ inputs.deny-args }}

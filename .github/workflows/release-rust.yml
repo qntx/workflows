@@ -46,6 +46,26 @@ on:
         required: false
         type: string
         default: ''
+      variants:
+        description: 'Newline-separated name=<cargo feature flags> variant builds, each built for every target in addition to the default build. name matches ^[a-z][a-z0-9]*$ and must be unique; flags are one of: --all-features, --no-default-features, --features <list>, --no-default-features --features <list>.'
+        required: false
+        type: string
+        default: ''
+      sbom:
+        description: 'Generate a CycloneDX JSON SBOM per archive named <bin>-<version>[-<variant>]-<target>.cdx.json.'
+        required: false
+        type: boolean
+        default: false
+      checksums-file:
+        description: 'Publish an aggregate SHA256SUMS asset covering every archive.'
+        required: false
+        type: boolean
+        default: false
+      smoke-command:
+        description: 'Whitespace-separated arguments run against every built binary before the release (e.g. --version). A non-zero exit blocks the release.'
+        required: false
+        type: string
+        default: ''
     outputs:
       release-url:
         description: 'URL of the created GitHub Release.'
@@ -57,8 +77,10 @@ on:
 permissions:
   contents: write
 
+# artifact-prefix separates calls in one run: a shared group holds one
+# running and one pending call, so a third call would be cancelled.
 concurrency:
-  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}-${{ inputs.artifact-prefix }}
   cancel-in-progress: false
 
 env:
@@ -76,25 +98,87 @@ jobs:
       - id: plan
         env:
           TARGETS: ${{ inputs.targets }}
+          VARIANTS: ${{ inputs.variants }}
+          SMOKE_COMMAND: ${{ inputs.smoke-command }}
         run: |
           set -euo pipefail
+
+          # Index 0 is the default build (empty variant/features); each
+          # `name=<flags>` line of `variants` appends one entry.
+          variant_names=('')
+          variant_flags=('')
+          seen_variants=' '
+          while IFS= read -r line; do
+            [[ -z "${line//[[:space:]]/}" ]] && continue
+            if [[ "$line" != *=* ]]; then
+              echo "::error::variant is not name=<flags>: ${line}"
+              exit 1
+            fi
+            vname="${line%%=*}"
+            vflags="${line#*=}"
+            if [[ ! "$vname" =~ ^[a-z][a-z0-9]*$ ]]; then
+              echo "::error::invalid variant name: ${vname}"
+              exit 1
+            fi
+            case "$seen_variants" in
+              *" $vname "*)
+                echo "::error::duplicate variant: ${vname}"
+                exit 1
+                ;;
+            esac
+            seen_variants+="$vname "
+            case "$vflags" in
+              '--all-features' | '--no-default-features') ;;
+              --features\ * | --no-default-features\ --features\ *)
+                vlist="${vflags##*--features }"
+                if [[ ! "$vlist" =~ ^[A-Za-z0-9_,-]+$ ]]; then
+                  echo "::error::invalid feature list in variant ${vname}: ${vflags}"
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "::error::invalid feature flags in variant ${vname}: ${vflags}"
+                exit 1
+                ;;
+            esac
+            variant_names+=("$vname")
+            variant_flags+=("$vflags")
+          done <<<"$VARIANTS"
+
+          if [[ -n "${SMOKE_COMMAND//[[:space:]]/}" ]]; then
+            # word-split is intentional: whitespace-separated arguments
+            # shellcheck disable=SC2086
+            for arg in $SMOKE_COMMAND; do
+              if [[ ! "$arg" =~ ^[A-Za-z0-9_./:=,+@-]+$ ]]; then
+                echo "::error::invalid smoke-command argument: ${arg}"
+                exit 1
+              fi
+            done
+          fi
+
           entries=()
           seen=' '
           # word-split is intentional: whitespace-separated triples
           # shellcheck disable=SC2086
           for t in $TARGETS; do
             case "$t" in
-              x86_64-unknown-linux-gnu) os='ubuntu-24.04'; cross=false; musl=false ;;
-              aarch64-unknown-linux-gnu) os='ubuntu-24.04'; cross=true; musl=false ;;
-              x86_64-unknown-linux-musl) os='ubuntu-24.04'; cross=false; musl=true ;;
-              aarch64-unknown-linux-musl) os='ubuntu-24.04-arm'; cross=false; musl=true ;;
-              aarch64-apple-darwin) os='macos-latest'; cross=false; musl=false ;;
-              x86_64-pc-windows-msvc | aarch64-pc-windows-msvc) os='windows-latest'; cross=false; musl=false ;;
+              x86_64-unknown-linux-gnu) os='ubuntu-24.04'; cross=false; musl=false; smoke_os='ubuntu-24.04' ;;
+              aarch64-unknown-linux-gnu) os='ubuntu-24.04'; cross=true; musl=false; smoke_os='ubuntu-24.04-arm' ;;
+              x86_64-unknown-linux-musl) os='ubuntu-24.04'; cross=false; musl=true; smoke_os='ubuntu-24.04' ;;
+              aarch64-unknown-linux-musl) os='ubuntu-24.04-arm'; cross=false; musl=true; smoke_os='ubuntu-24.04-arm' ;;
+              aarch64-apple-darwin) os='macos-latest'; cross=false; musl=false; smoke_os='macos-latest' ;;
+              x86_64-pc-windows-msvc | aarch64-pc-windows-msvc) os='windows-latest'; cross=false; musl=false; smoke_os='windows-latest' ;;
               *)
                 echo "::error::unsupported target triple: ${t}"
                 exit 1
                 ;;
             esac
+            # The x86_64/aarch64 windows builds share one case arm; the arm64
+            # smoke runner is separate because windows-latest cannot execute
+            # cross-built aarch64 binaries.
+            if [[ "$t" == 'aarch64-pc-windows-msvc' ]]; then
+              smoke_os='windows-11-arm'
+            fi
             case "$seen" in
               *" $t "*)
                 echo "::error::duplicate target: ${t}"
@@ -102,8 +186,12 @@ jobs:
                 ;;
             esac
             seen+="$t "
-            entries+=("$(jq -cn --arg target "$t" --arg os "$os" --argjson cross "$cross" --argjson musl "$musl" \
-              '{target: $target, os: $os} + (if $cross then {cross: true} else {} end) + (if $musl then {musl: true} else {} end)')")
+            for i in "${!variant_names[@]}"; do
+              entries+=("$(jq -cn --arg target "$t" --arg os "$os" --arg smoke_os "$smoke_os" \
+                --arg variant "${variant_names[$i]}" --arg features "${variant_flags[$i]}" \
+                --argjson cross "$cross" --argjson musl "$musl" \
+                '{target: $target, os: $os, smoke_os: $smoke_os, variant: $variant, features: $features} + (if $cross then {cross: true} else {} end) + (if $musl then {musl: true} else {} end)')")
+            done
           done
           if [ "${#entries[@]}" -eq 0 ]; then
             echo '::error::targets is empty'
@@ -113,12 +201,15 @@ jobs:
           printf 'matrix=%s\n' "$matrix" >>"$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.target }}
+    name: Build ${{ matrix.variant != '' && format('{0} ', matrix.variant) || '' }}${{ matrix.target }}
     needs: plan
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      # cargo-cyclonedx 0.5.10 (released 2026-11-10)
+      CARGO_CYCLONEDX_VERSION: '0.5.10'
     defaults:
       run:
         shell: bash
@@ -192,13 +283,19 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           PACKAGE: ${{ inputs.package }}
-        run: cargo build --release --locked --target "$TARGET" -p "$PACKAGE"
+          FEATURES: ${{ matrix.features }}
+        run: |
+          set -euo pipefail
+          # word-split is intentional: FEATURES is a validated flag list
+          # shellcheck disable=SC2086
+          cargo build --release --locked --target "$TARGET" -p "$PACKAGE" $FEATURES
 
       - name: Package
         working-directory: ${{ inputs.working-directory }}
         env:
           BIN: ${{ inputs.bin }}
           TARGET: ${{ matrix.target }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           set -euo pipefail
           bin="$BIN"
@@ -208,7 +305,7 @@ jobs:
             ver='0.0.0-dev'
           fi
           target="$TARGET"
-          staging="$bin-$ver-$target"
+          staging="$bin-$ver${VARIANT:+-$VARIANT}-$target"
           exe="$bin"
           [[ "$target" == *windows* ]] && exe="$exe.exe"
 
@@ -243,18 +340,101 @@ jobs:
 
           rm -rf "$staging"
 
+      - name: SBOM
+        if: inputs.sbom
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          BIN: ${{ inputs.bin }}
+          PACKAGE: ${{ inputs.package }}
+          TARGET: ${{ matrix.target }}
+          VARIANT: ${{ matrix.variant }}
+          FEATURES: ${{ matrix.features }}
+        run: |
+          set -euo pipefail
+          cargo install cargo-cyclonedx --locked --version "$CARGO_CYCLONEDX_VERSION"
+          manifest="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r --arg p "$PACKAGE" '.packages[] | select(.name == $p) | .manifest_path')"
+          if [[ -z "$manifest" ]]; then
+            echo "::error::no manifest for package ${PACKAGE}"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver='0.0.0-dev'
+          fi
+          stem="$BIN-$ver${VARIANT:+-$VARIANT}-$TARGET"
+          # word-split is intentional: FEATURES is a validated flag list
+          # shellcheck disable=SC2086
+          cargo cyclonedx --manifest-path "$manifest" --format json --spec-version 1.5 \
+            --target "$TARGET" $FEATURES --override-filename "$stem.cdx"
+          # cargo writes the SBOM next to the manifest; normalise Windows
+          # backslashes so dirname works under Git Bash.
+          mv "$(dirname "${manifest//\\//}")/$stem.cdx.json" dist/
+          jq -e '.bomFormat == "CycloneDX"' "dist/$stem.cdx.json" >/dev/null
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ inputs.artifact-prefix }}-${{ matrix.target }}
+          name: ${{ inputs.artifact-prefix }}-${{ matrix.variant != '' && format('{0}-', matrix.variant) || '' }}${{ matrix.target }}
           path: ${{ inputs.working-directory }}/dist/
           if-no-files-found: error
           retention-days: 7
 
+  smoke:
+    name: Smoke ${{ matrix.variant != '' && format('{0} ', matrix.variant) || '' }}${{ matrix.target }}
+    needs: [plan, build]
+    if: inputs.smoke-command != ''
+    runs-on: ${{ matrix.smoke_os }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.artifact-prefix }}-${{ matrix.variant != '' && format('{0}-', matrix.variant) || '' }}${{ matrix.target }}
+
+      - name: Verify and smoke
+        env:
+          BIN: ${{ inputs.bin }}
+          TARGET: ${{ matrix.target }}
+          SMOKE_COMMAND: ${{ inputs.smoke-command }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(*.tar.gz *.zip)
+          if [[ ${#archives[@]} -ne 1 ]]; then
+            echo "::error::expected exactly one archive, got ${#archives[@]}"
+            exit 1
+          fi
+          archive="${archives[0]}"
+          if command -v sha256sum &>/dev/null; then
+            sha256sum -c "$archive.sha256"
+          else
+            shasum -a 256 -c "$archive.sha256"
+          fi
+          if [[ "$archive" == *.zip ]]; then
+            7z x "$archive"
+            exe="./$BIN.exe"
+          else
+            tar xzf "$archive"
+            exe="./$BIN"
+          fi
+          # word-split is intentional: whitespace-separated smoke arguments
+          # shellcheck disable=SC2086
+          "$exe" $SMOKE_COMMAND
+
   release:
-    needs: build
+    needs: [build, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success' && (needs.smoke.result == 'success' || needs.smoke.result == 'skipped') }}
     permissions:
       contents: write
     outputs:
@@ -294,13 +474,33 @@ jobs:
         id: assets
         env:
           BIN: ${{ inputs.bin }}
+          SBOM: ${{ inputs.sbom }}
+          CHECKSUMS_FILE: ${{ inputs.checksums-file }}
         run: |
           set -euo pipefail
           {
             echo 'files<<EOF'
             printf '%s\n' "${BIN}-*.tar.gz" "${BIN}-*.zip" "${BIN}-*.sha256"
+            [[ "$SBOM" == 'true' ]] && printf '%s\n' "${BIN}-*.cdx.json"
+            [[ "$CHECKSUMS_FILE" == 'true' ]] && printf '%s\n' 'SHA256SUMS'
             echo 'EOF'
           } >>"$GITHUB_OUTPUT"
+
+      - name: Write SHA256SUMS
+        if: inputs.checksums-file
+        env:
+          BIN: ${{ inputs.bin }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sums=("${BIN}"-*.sha256)
+          if [[ ${#sums[@]} -eq 0 ]]; then
+            echo '::error::no .sha256 files to aggregate into SHA256SUMS'
+            exit 1
+          fi
+          mapfile -t sorted < <(printf '%s\n' "${sums[@]}" | sort)
+          cat "${sorted[@]}" >SHA256SUMS
+          sha256sum -c SHA256SUMS
 
       - name: Generate changelog
         id: cliff

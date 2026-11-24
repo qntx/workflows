@@ -1,0 +1,41 @@
+name: Self / Health
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Read only; print the planned action and body without writing.'
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: qntx-workflows-self-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.4'
+      - uses: $/actions/org-health
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          org: ${{ github.repository_owner }}
+          repository: ${{ github.repository }}
+          dry-run: ${{ inputs.dry-run || false }}
