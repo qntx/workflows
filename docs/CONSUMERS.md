@@ -339,11 +339,142 @@ permissions:
   contents: write
 ```
 
+## Deploy / Cloudflare
+
+```yaml
+permissions:
+  contents: read
+```
+
+`deploy-cloudflare.yml` runs `wrangler deploy` or `wrangler versions upload` with a caller-pinned `wrangler-version`. Two things to know about secrets:
+
+- `dry-run: true` needs **no** Cloudflare secret — use it on `pull_request`. The token and account id reach the wrangler step only outside dry-run.
+- **Environment-secret precedence**: when `environment` is set, the job-level `environment:` in the _called_ workflow resolves `CLOUDFLARE_API_TOKEN` to the environment's secret of that name — not the repository secret the caller passes. Scope the token to the environment and pass `secrets: inherit` (or the repo secret for unscoped use).
+
+Outputs: `version-id` and `url` (first deploy target, or `preview_url` for `versions upload`); both empty in dry-run. `args` is newline-separated argv — one element per line, so values with spaces work (`--env` newline `production`).
+
+### qntx/sh sketch
+
+Two Workers, same build at the monorepo root (`build-directory`), dry-run on PRs, deploy on main behind the `production` environment. `wrangler-version` is the version their `devDependencies` pin (today `4.162.0`); sh's current `ci.yml` has no deploy job — deploys are manual today.
+
+```yaml
+jobs:
+  sh:
+    uses: qntx/workflows/.github/workflows/deploy-cloudflare.yml@v2
+    permissions:
+      contents: read
+    secrets: inherit
+    with:
+      working-directory: apps/sh
+      build-directory: .
+      build-command: bun install --frozen-lockfile && bun run --cwd apps/sh build
+      wrangler-version: 4.162.0
+      # No environment on pull requests: dry-run needs no secret and must not
+      # wait for production approvals.
+      environment: ${{ github.event_name == 'pull_request' && '' || 'production' }}
+      dry-run: ${{ github.event_name == 'pull_request' }}
+  # sk: same job with working-directory apps/sk and --cwd apps/sk
+```
+
+### qntx/wallet gateway sketch
+
+Today `gateway.yml` hand-rolls two monolithic jobs (staging on green `workflow_run`, production on dispatch). The callee absorbs **checkout of the CI-passed commit** (`ref`), install/build (`build-command`), and the deploy itself (`args: --env <env>` + `--message "deploy <sha>"`), plus environment approvals and the env-scoped token. The caller keeps, as separate jobs: the "CI passed on main for this commit" gate, the staging-vs-production account separation check, `deploy-check.ts secrets`, `deploy-check.ts rollback-plan` (job output `rollback_version`), the smoke job (`needs: deploy`, URL from `needs.deploy.outputs.url` or the fixed hostname), the rollback job, and the "rollback impossible" alert.
+
+```yaml
+# Production path; staging is the same graph with environment staging,
+# --env staging and `ref: ${{ github.event.workflow_run.head_sha }}`.
+env:
+  COMMIT: ${{ github.sha }}
+
+jobs:
+  gate: # stays in the caller
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      # "CI passed on main for this commit" (gh run list … --status success),
+      # plus the staging/production account separation check on staging.
+      - run: ./scripts/require-ci-passed.sh "$COMMIT"
+
+  plan: # stays in the caller; needs the env-scoped token
+    needs: gate
+    environment: production
+    runs-on: ubuntu-latest
+    outputs:
+      rollback_version: ${{ steps.plan.outputs.rollback_version }}
+    steps:
+      # checkout + setup-bun + bun install, then:
+      - run: bun scripts/deploy-check.ts secrets production
+        working-directory: apps/gateway
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - id: plan
+        run: bun scripts/deploy-check.ts rollback-plan production "$COMMIT"
+        working-directory: apps/gateway
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+
+  deploy: # the reusable workflow
+    needs: plan
+    uses: qntx/workflows/.github/workflows/deploy-cloudflare.yml@v2
+    permissions:
+      contents: read
+    secrets: inherit # the production environment's CLOUDFLARE_API_TOKEN wins
+    with:
+      ref: ${{ github.sha }}
+      working-directory: apps/gateway
+      build-directory: .
+      build-command: bun install --frozen-lockfile && bunx vp run @qntx/wallet-engine#build
+      environment: production
+      wrangler-version: 4.164.0
+      args: |
+        --env
+        production
+        --message
+        deploy ${{ github.sha }}
+
+  smoke: # stays in the caller
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      # checkout + setup-bun + bun install, then:
+      - run: bun scripts/smoke.ts https://gateway.meowl.xyz production
+        working-directory: apps/gateway
+
+  rollback: # stays in the caller
+    needs: [plan, deploy, smoke]
+    if: ${{ always() && needs.deploy.result == 'success' && needs.smoke.result == 'failure' && needs.plan.outputs.rollback_version != '' }}
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      # checkout + setup-bun + bun install, then:
+      - run: bunx wrangler rollback "$ROLLBACK_VERSION" --env production --message "smoke failed for $COMMIT" --yes
+        working-directory: apps/gateway
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ROLLBACK_VERSION: ${{ needs.plan.outputs.rollback_version }}
+
+  rollback-impossible: # stays in the caller
+    needs: [plan, deploy, smoke]
+    if: ${{ always() && needs.deploy.result == 'success' && needs.smoke.result == 'failure' && needs.plan.outputs.rollback_version == '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo '::error::automatic rollback impossible — see apps/gateway/README.md "Operator runbook"'
+          exit 1
+```
+
+Splitting the monolithic job changes one thing: the smoke and the rollback now run on fresh runners, so each repeats checkout and install. The `deploy` job's `version-id` output is the new version; the rollback target still comes from `plan`, which records the version that was live before the deploy.
+
 ## Release
 
 `release.yml` and `release-rust.yml`. `release-rust.yml` `targets` (default: all five gnu/apple/msvc triples) selects the build matrix; pass a whitespace-separated subset to skip platforms the project does not support, or append the opt-in `x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl` triples for statically linked Linux binaries (built natively on `ubuntu-24.04` / `ubuntu-24.04-arm` via `musl-tools`). Linux build runners are pinned to `ubuntu-24.04`. `artifact-prefix` (default `dist`) renames the `dist-<target>` artifacts when one run calls the workflow for the same target more than once.
 
 The `release` job publishes draft-first — draft release, all assets, then publish — which is required for GitHub immutable releases and also removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; a tag that is already published fails closed instead of mutating assets.
+
+The asset names `release-rust.yml` publishes follow a machine-readable naming contract — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — specified in `contract/release-assets.json` and documented in [docs/RELEASE-ASSETS.md](RELEASE-ASSETS.md). Consumers that parse assets should implement that grammar (qntx/sh vendors a byte-identical copy).
 
 ```yaml
 permissions:

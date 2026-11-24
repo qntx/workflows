@@ -15,10 +15,10 @@ concurrency:
 env:
   ACTIONLINT_VERSION: '1.7.12'
   ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
-  ZIZMOR_VERSION: '1.30.1'
-  ZIZMOR_SHA256: 'e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a'
-  PINACT_VERSION: '5.0.0'
-  PINACT_SHA256: 'd005bbb85da80dacdc07816f24a5da723a9f6d1e9f3d3e7e73df33f9caa1358f'
+  ZIZMOR_VERSION: '1.32.0'
+  ZIZMOR_SHA256: 'bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b'
+  PINACT_VERSION: '5.0.2'
+  PINACT_SHA256: '7f003d8f51e984c2264d2009d430e3e0e87ae404a0e2dc2a9a277b0f731bf5b7'
 
 jobs:
   actionlint:
@@ -147,6 +147,20 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Install and test validator
         working-directory: actions/validate-docs-tree
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
+      - name: Install and test release-assets contract
+        working-directory: contract
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
+      - name: Install and test org-health
+        working-directory: actions/org-health
         run: |
           set -euo pipefail
           bun install --frozen-lockfile
@@ -500,6 +514,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Download dist artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -528,6 +547,11 @@ jobs:
             shasum -a 256 -c "$f"
           done
           echo "verified ${#sums[@]} checksum files"
+
+      # Before any archive is extracted into downloads/: every file there
+      # must be a release asset.
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
 
       # x86_64 musl runs natively on the amd64 runner; the aarch64 musl
       # archive is verified on ubuntu-24.04-arm in its own job.
@@ -584,6 +608,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Download dist artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -611,6 +640,34 @@ jobs:
             sha256sum -c "$f"
           done
           echo "asset set matches the targets input"
+
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
+
+  # dry-run only: no secrets, no Cloudflare account is touched.
+  e2e-deploy-cloudflare:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      dry-run: true
+      build-command: bun run build
+
+  e2e-deploy-cloudflare-versions:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      command: versions upload
+      args: |
+        --message
+        dry run from self-ci
+      dry-run: true
+      build-command: bun run build
 
   scorecard:
     runs-on: ubuntu-latest
@@ -679,6 +736,8 @@ jobs:
         e2e-release-rust-musl-arm-verify,
         e2e-release-rust-targets,
         e2e-release-rust-targets-verify,
+        e2e-deploy-cloudflare,
+        e2e-deploy-cloudflare-versions,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -716,7 +775,9 @@ jobs:
           || needs.e2e-release-rust-verify.result != 'success'
           || needs.e2e-release-rust-musl-arm-verify.result != 'success'
           || needs.e2e-release-rust-targets.result != 'success'
-          || needs.e2e-release-rust-targets-verify.result != 'success' }}
+          || needs.e2e-release-rust-targets-verify.result != 'success'
+          || needs.e2e-deploy-cloudflare.result != 'success'
+          || needs.e2e-deploy-cloudflare-versions.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

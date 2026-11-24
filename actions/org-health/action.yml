@@ -1,0 +1,32 @@
+name: org-health
+description: Maintain the single "Org health" issue listing failing default-branch workflows.
+inputs:
+  github-token:
+    description: 'Token for the GitHub REST API (actions:read on the org, issues:write on repository).'
+    required: true
+  org:
+    description: 'Organization to scan.'
+    required: false
+    default: 'qntx'
+  repository:
+    description: 'owner/name of the repository that hosts the health issue.'
+    required: false
+    default: 'qntx/workflows'
+  dry-run:
+    description: 'Read only; print the planned action and body without writing.'
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        ORG: ${{ inputs.org }}
+        REPOSITORY: ${{ inputs.repository }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        bun install --frozen-lockfile
+        bun org-health.ts
