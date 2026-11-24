@@ -472,6 +472,8 @@ Splitting the monolithic job changes one thing: the smoke and the rollback now r
 
 The `release` job publishes draft-first — draft release, all assets, then publish — which is required for GitHub immutable releases and also removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; a tag that is already published fails closed instead of mutating assets.
 
+The asset names `release-rust.yml` publishes follow a machine-readable naming contract — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — specified in `contract/release-assets.json` and documented in [docs/RELEASE-ASSETS.md](RELEASE-ASSETS.md). Consumers that parse assets should implement that grammar (qntx/sh vendors a byte-identical copy).
+
 ```yaml
 permissions:
   contents: write
