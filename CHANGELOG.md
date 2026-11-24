@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `self-health.yml` (`Self / Health`): scheduled scan (`23 5 * * *`, `workflow_dispatch` with a `dry-run` input) that maintains one `Org health` issue listing the active workflows whose latest completed `push`/`schedule` run on the default branch is failing, with consecutive-failure counts and links to the newest failing run.
+- `self-health.yml` (`Self / Health`): scheduled scan (`23 5 * * *`, `workflow_dispatch` with a `dry-run` input) that maintains one `Org health` issue listing the active workflows whose latest completed `push`/`schedule` run on the default branch is failing, with consecutive-failure counts and links to the newest failing run (#130).
 
 ## [2.13.1] - 2026-10-26
 
