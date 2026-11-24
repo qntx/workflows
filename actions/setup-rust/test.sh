@@ -158,8 +158,9 @@ else
 fi
 
 action="$dir/action.yml"
-if [ "$(grep -c 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8' "$action")" -eq 2 ] &&
-  [ "$(grep -c 'Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6' "$action")" -eq 1 ] &&
+# Pin shape only: the SHAs themselves belong to Dependabot and pinact.
+if [ "$(grep -cE 'uses: dtolnay/rust-toolchain@[0-9a-f]{40} # v1$' "$action")" -eq 2 ] &&
+  [ "$(grep -cE 'uses: Swatinem/rust-cache@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+$' "$action")" -eq 1 ] &&
   grep -F 'toolchain: ${{ inputs.rust-version }}' "$action" >/dev/null &&
   grep -F 'toolchain: stable' "$action" >/dev/null &&
   grep -F "if: steps.plan.outputs.mode == 'explicit'" "$action" >/dev/null &&
