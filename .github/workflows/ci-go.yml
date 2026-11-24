@@ -37,7 +37,7 @@ on:
         description: 'golangci-lint version. Must be v2.N, v2.N.M, or latest; not v2.'
         required: false
         type: string
-        default: 'v2.13'
+        default: 'v2.15'
 
 permissions:
   contents: read
