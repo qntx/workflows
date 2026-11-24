@@ -341,6 +341,23 @@ permissions:
 
 `release.yml` and `release-rust.yml`. `release-rust.yml` `targets` (default: all five gnu/apple/msvc triples) selects the build matrix; pass a whitespace-separated subset to skip platforms the project does not support, or append the opt-in `x86_64-unknown-linux-musl` / `aarch64-unknown-linux-musl` triples for statically linked Linux binaries (built natively on `ubuntu-24.04` / `ubuntu-24.04-arm` via `musl-tools`). Linux build runners are pinned to `ubuntu-24.04`. `artifact-prefix` (default `dist`) renames the `dist-<target>` artifacts when one run calls the workflow for the same target more than once.
 
+Opt-in extras, all off by default so existing callers keep today's behaviour:
+
+- `variants`: newline-separated `name=<cargo feature flags>` lines; each variant is built for every target in addition to the default, producing `<bin>-<version>-<variant>-<target>.<ext>` assets per the naming contract.
+- `sbom`: a CycloneDX JSON SBOM per archive named `<bin>-<version>[-<variant>]-<target>.cdx.json`.
+- `checksums-file`: an aggregate `SHA256SUMS` asset covering every archive.
+- `smoke-command`: whitespace-separated arguments (e.g. `--version`) run against every built binary before the release; a non-zero exit blocks it. Each archive is smoke-tested on a runner that can execute it — musl/gnu on `ubuntu-24.04` / `ubuntu-24.04-arm`, macOS on `macos-latest`, `x86_64-pc-windows-msvc` on `windows-latest`, `aarch64-pc-windows-msvc` on `windows-11-arm` (the x64 build runner cannot execute aarch64 binaries). `windows-11-arm` and `ubuntu-24.04-arm` are larger arm64 runners: free on public repositories, but a private repository needs them enabled in the org's billing plan.
+- `attest`: per-archive build-provenance attestations (plus an SBOM attestation per archive when `sbom` is on), in a tag-gated `attest` job.
+
+With `attest: true` the caller job must additionally grant `id-token: write` and `attestations: write`:
+
+```yaml
+permissions:
+  contents: write
+  id-token: write # only with attest: true
+  attestations: write # only with attest: true
+```
+
 The `release` job publishes draft-first — draft release, all assets, then publish — which is required for GitHub immutable releases and also removes the window where "Latest" points at a release whose assets are still uploading. A re-run reuses an existing draft for the tag; a tag that is already published fails closed instead of mutating assets.
 
 The asset names `release-rust.yml` publishes follow a machine-readable naming contract — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — specified in `contract/release-assets.json` and documented in [docs/RELEASE-ASSETS.md](RELEASE-ASSETS.md). Consumers that parse assets should implement that grammar (qntx/sh vendors a byte-identical copy).
