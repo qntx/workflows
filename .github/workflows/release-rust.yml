@@ -77,8 +77,10 @@ on:
 permissions:
   contents: write
 
+# artifact-prefix separates calls in one run: a shared group holds one
+# running and one pending call, so a third call would be cancelled.
 concurrency:
-  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+  group: qntx-workflows-release-rust-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}-${{ inputs.artifact-prefix }}
   cancel-in-progress: false
 
 env:

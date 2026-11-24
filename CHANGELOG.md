@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `self-ci.yml`: the `tests` job typechecks and unit-tests the contract, including a drift guard that asserts `release-rust.yml`'s plan case-arm triples, `targets` description, and Package-step archive-extension rule cannot drift from the contract; `e2e-release-rust-verify` and `e2e-release-rust-targets-verify` now run the contract `check` CLI over every downloaded release asset (#129).
 - `release-rust.yml`: opt-in `variants` (newline-separated `name=<cargo feature flags>` builds per target, assets named `<bin>-<version>-<variant>-<target>`), `sbom` (CycloneDX `<stem>.cdx.json` per archive via pinned cargo-cyclonedx), `checksums-file` (aggregate `SHA256SUMS` asset), and `smoke-command` (per-archive smoke on the per-target runner before the release). All default off; callers that set none of them get unchanged jobs, check names, artifact names, and asset sets. Self-CI `e2e-release-rust-extras` exercises every new input and its verify job asserts the exact 18-file asset set, checksums, SBOM format, `--version` smoke output, and contract conformance (#131).
 
+### Fixed
+
+- `release-rust.yml`: the workflow-level concurrency group now includes `artifact-prefix`. A run that called the workflow three or more times shared one group, which holds one running and one pending call, so the third call was cancelled (#131).
+
 ## [2.13.1] - 2026-10-26
 
 ### Fixed
