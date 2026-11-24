@@ -1,0 +1,6 @@
+{
+  "name": "qntx-workflows-fixture",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-17",
+  "workers_dev": true,
+}

@@ -504,6 +504,31 @@ jobs:
           done
           echo "asset set matches the targets input"
 
+  # dry-run only: no secrets, no Cloudflare account is touched.
+  e2e-deploy-cloudflare:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      dry-run: true
+      build-command: bun run build
+
+  e2e-deploy-cloudflare-versions:
+    uses: $/.github/workflows/deploy-cloudflare.yml
+    permissions:
+      contents: read
+    with:
+      working-directory: fixtures/cloudflare-worker
+      wrangler-version: 4.164.0
+      command: versions upload
+      args: |
+        --message
+        dry run from self-ci
+      dry-run: true
+      build-command: bun run build
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -566,6 +591,8 @@ jobs:
         e2e-release-rust-musl-arm-verify,
         e2e-release-rust-targets,
         e2e-release-rust-targets-verify,
+        e2e-deploy-cloudflare,
+        e2e-deploy-cloudflare-versions,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -602,7 +629,9 @@ jobs:
           || needs.e2e-release-rust-verify.result != 'success'
           || needs.e2e-release-rust-musl-arm-verify.result != 'success'
           || needs.e2e-release-rust-targets.result != 'success'
-          || needs.e2e-release-rust-targets-verify.result != 'success' }}
+          || needs.e2e-release-rust-targets-verify.result != 'success'
+          || needs.e2e-deploy-cloudflare.result != 'success'
+          || needs.e2e-deploy-cloudflare-versions.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

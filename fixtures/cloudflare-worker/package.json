@@ -1,0 +1,8 @@
+{
+  "name": "cloudflare-worker-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun -e \"await Bun.file('src/index.ts').text()\""
+  }
+}
