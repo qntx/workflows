@@ -13,15 +13,19 @@ check:
 markdownlint:
     bun run markdownlint
 
-# Run validator tests.
+# Run validator and contract tests.
 test:
     bun install --frozen-lockfile --cwd actions/validate-docs-tree
     bun test --cwd actions/validate-docs-tree
+    bun install --frozen-lockfile --cwd contract
+    bun test --cwd contract
 
-# Typecheck the validator.
+# Typecheck the validator and the contract.
 typecheck:
     bun install --frozen-lockfile --cwd actions/validate-docs-tree
     bun run --cwd actions/validate-docs-tree typecheck
+    bun install --frozen-lockfile --cwd contract
+    bun run --cwd contract typecheck
 
 # Unit tests for private composite actions.
 test-composites:
