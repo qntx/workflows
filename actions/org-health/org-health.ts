@@ -1,6 +1,8 @@
 // Maintains the single "Org health" issue in qntx/workflows listing the
 // active workflows whose latest completed push/schedule run on the default
-// branch is failing. Read-mostly: every code path is GET except the issue
+// branch is failing and has not been followed by a successful run on a tag
+// (a workflow that moved from branch pushes to release tags leaves its last
+// branch failure behind forever). Read-mostly: every code path is GET except the issue
 // create/patch, which never runs under DRY_RUN.
 
 import { appendFileSync } from 'node:fs';
@@ -195,6 +197,8 @@ export interface Streak {
   /** true when no success was found inside the fetched page. */
   bounded: boolean;
   failingSince: string | null;
+  /** created_at of the newest failing run. */
+  latestFailureAt: string | null;
   url: string | null;
 }
 
@@ -203,6 +207,7 @@ export function summarizeStreak(runs: WorkflowRun[]): Streak {
   let consecutive = 0;
   let url: string | null = null;
   let failingSince: string | null = null;
+  let latestFailureAt: string | null = null;
   for (const run of runs) {
     const conclusion = run.conclusion;
     if (conclusion === null || IGNORED_CONCLUSIONS.has(conclusion)) {
@@ -212,6 +217,7 @@ export function summarizeStreak(runs: WorkflowRun[]): Streak {
       consecutive += 1;
       if (url === null) {
         url = run.html_url;
+        latestFailureAt = run.created_at;
       }
       failingSince = run.created_at;
       continue;
@@ -222,6 +228,7 @@ export function summarizeStreak(runs: WorkflowRun[]): Streak {
         consecutive,
         bounded: false,
         failingSince,
+        latestFailureAt,
         url,
       };
     }
@@ -232,8 +239,50 @@ export function summarizeStreak(runs: WorkflowRun[]): Streak {
     consecutive,
     bounded: true,
     failingSince,
+    latestFailureAt,
     url,
   };
+}
+
+// True when the workflow has a successful push run on a tag that is newer
+// than `after`. Tag runs report the tag name as head_branch, so each
+// candidate is confirmed against the repository's tag refs.
+export async function succeededOnTagSince(
+  f: FetchLike,
+  apiUrl: string,
+  owner: string,
+  repo: string,
+  workflowId: number,
+  branch: string,
+  after: string,
+  token: string,
+): Promise<boolean> {
+  const res = await apiGet(
+    f,
+    `${apiUrl}/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?event=push&status=success&per_page=20`,
+    token,
+  );
+  const data = (await res.json()) as { workflow_runs?: WorkflowRun[] };
+  const names = new Set(
+    (data.workflow_runs ?? [])
+      .filter((r) => r.head_branch !== branch && r.created_at > after)
+      .map((r) => r.head_branch),
+  );
+  for (const name of names) {
+    try {
+      await apiGet(
+        f,
+        `${apiUrl}/repos/${owner}/${repo}/git/ref/tags/${encodeURIComponent(name)}`,
+        token,
+      );
+      return true;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) {
+        throw error;
+      }
+    }
+  }
+  return false;
 }
 
 export interface FailRow {
@@ -260,7 +309,7 @@ export function renderBody(input: {
   const lines: string[] = [
     MARKER,
     '',
-    `Public, non-archived repositories of \`${input.org}\`; the latest completed \`push\`/\`schedule\` run of each active workflow on the default branch.`,
+    `Public, non-archived repositories of \`${input.org}\`; the latest completed \`push\`/\`schedule\` run of each active workflow on the default branch, unless a newer tag run succeeded.`,
     '',
     'Private repositories are out of scope: their Actions are currently blocked by billing.',
     '',
@@ -436,7 +485,18 @@ export async function run(opts: RunOptions): Promise<RunResult> {
         if (
           streak.failing &&
           streak.failingSince !== null &&
-          streak.url !== null
+          streak.latestFailureAt !== null &&
+          streak.url !== null &&
+          !(await succeededOnTagSince(
+            f,
+            opts.apiUrl,
+            opts.org,
+            repo.name,
+            wf.id,
+            branch,
+            streak.latestFailureAt,
+            opts.token,
+          ))
         ) {
           rows.push({
             repo: repo.name,

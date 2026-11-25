@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `self-health.yml`: a workflow whose newest default-branch failure is followed by a successful `push` run on a tag is no longer listed. A workflow that moved from branch pushes to release tags (qntx/corx `Container`) kept its last branch failure forever.
+
 ## [2.14.0] - 2026-11-25
 
 ### Added
