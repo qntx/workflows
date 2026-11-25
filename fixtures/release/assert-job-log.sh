@@ -35,15 +35,25 @@ job_id="$(jq -r '.[0].id' <<<"$match")"
 echo "job '$job_name' (id $job_id)"
 
 # Job logs can lag right after the job completes: retry while the fetch
-# fails or the body is still empty.
+# fails or the body is still empty. curl, not `gh api`: gh refuses to print
+# a response that contains terminal escape sequences (job logs are full of
+# ANSI colours). curl follows the redirect to blob storage without
+# forwarding the Authorization header to the other host.
 logs=''
+err=''
 for _ in 1 2 3 4 5 6; do
-  if logs="$(gh api "repos/$REPO/actions/jobs/$job_id/logs" 2>/dev/null)" && [[ -n "$logs" ]]; then
+  if logs="$(curl -fsSL --max-time 60 \
+    -H "Authorization: Bearer $GH_TOKEN" \
+    -H 'Accept: application/vnd.github+json' \
+    "${GITHUB_API_URL:-https://api.github.com}/repos/$REPO/actions/jobs/$job_id/logs" 2>&1)" \
+    && [[ -n "$logs" ]]; then
     break
   fi
+  err="$logs"
+  logs=''
   sleep 10
 done
-[[ -n "$logs" ]] || die "job '$job_name' log is still empty after 6 fetches"
+[[ -n "$logs" ]] || die "job '$job_name' log is still empty after 6 fetches: ${err}"
 
 status=0
 for sub in "$@"; do
