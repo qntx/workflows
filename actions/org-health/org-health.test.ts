@@ -234,7 +234,7 @@ describe('renderBody', () => {
     expect(body).toBe(
       `${MARKER}
 
-Public, non-archived repositories of \`qntx\`; the latest completed \`push\`/\`schedule\` run of each active workflow on the default branch.
+Public, non-archived repositories of \`qntx\`; the latest completed \`push\`/\`schedule\` run of each active workflow on the default branch, unless a newer tag run succeeded.
 
 Private repositories are out of scope: their Actions are currently blocked by billing.
 
@@ -457,6 +457,46 @@ describe('run()', () => {
     expect(res.body).toContain(
       '| corx | CI | 2026-01-02 | 2 | [run](https://example/r/3) |',
     );
+  });
+
+  test('a newer successful tag run clears a default-branch failure', async () => {
+    const tagRun = (head_branch: string) => ({
+      workflow_runs: [
+        wr({ head_branch, created_at: '2026-01-04T00:00:00Z' }),
+        wr({ head_branch: 'v0.0.1', created_at: '2026-01-02T12:00:00Z' }),
+      ],
+    });
+    const routesFor = (head_branch: string) => ({
+      'https://api.test/repos/qntx/corx/actions/workflows/11/runs?event=push&status=success':
+        { body: tagRun(head_branch) },
+      'https://api.test/repos/qntx/corx/git/ref/tags/v1.0.0': {
+        body: { ref: 'refs/tags/v1.0.0' },
+      },
+      'https://api.test/repos/qntx/corx/git/ref/tags/': {
+        status: 404,
+        body: { message: 'Not Found' },
+      },
+      ...orgRoutes(),
+    });
+    const cleared = await run({
+      ...base,
+      dryRun: true,
+      fetchImpl: fakeFetch(routesFor('v1.0.0'), []),
+    });
+    expect(cleared.rows).toEqual([]);
+    expect(cleared.notChecked).toEqual([{ repo: 'broken', status: 404 }]);
+
+    // A newer success on a non-tag ref, or an older tag success, clears nothing.
+    const calls: Call[] = [];
+    const kept = await run({
+      ...base,
+      dryRun: true,
+      fetchImpl: fakeFetch(routesFor('feature'), calls),
+    });
+    expect(kept.rows).toHaveLength(1);
+    expect(
+      calls.filter((c) => c.url.includes('/git/ref/tags/')).map((c) => c.url),
+    ).toEqual(['https://api.test/repos/qntx/corx/git/ref/tags/feature']);
   });
 
   test('write mode creates the issue when none exists', async () => {
