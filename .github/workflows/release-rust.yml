@@ -66,6 +66,11 @@ on:
         required: false
         type: string
         default: ''
+      glibc-floor:
+        description: 'Newest glibc symbol version (MAJOR.MINOR, e.g. 2.31) the *-unknown-linux-gnu binaries may require. Empty keeps the native ubuntu-24.04 build (glibc 2.39). When set, both gnu targets build with cargo-zigbuild for <triple>.<floor> instead of the apt cross toolchain, and the build fails if a binary requires a newer GLIBC_x.y. cross-packages must stay at its default; cross-env still applies to aarch64-unknown-linux-gnu.'
+        required: false
+        type: string
+        default: ''
     outputs:
       release-url:
         description: 'URL of the created GitHub Release.'
@@ -85,6 +90,14 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # glibc-floor toolchain: zig 0.17.1 (released 2026-11-02), cargo-zigbuild
+  # 0.24.1 (released 2026-11-04). No CARGO_ prefix: rust-cache hashes CARGO*
+  # env vars into its cache key, so a CARGO_* name would invalidate every
+  # caller's cache.
+  ZIG_VERSION: '0.17.1'
+  ZIG_SHA256: '3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a'
+  ZIGBUILD_VERSION: '0.24.1'
+  ZIGBUILD_SHA256: 'f09b180a517af0e4dd4bffc921bb88e5ab705452a9dd948c61e489b3020c68c2'
 
 jobs:
   plan:
@@ -100,6 +113,8 @@ jobs:
           TARGETS: ${{ inputs.targets }}
           VARIANTS: ${{ inputs.variants }}
           SMOKE_COMMAND: ${{ inputs.smoke-command }}
+          GLIBC_FLOOR: ${{ inputs.glibc-floor }}
+          CROSS_PACKAGES: ${{ inputs.cross-packages }}
         run: |
           set -euo pipefail
 
@@ -156,6 +171,25 @@ jobs:
             done
           fi
 
+          # glibc-floor must be a glibc 2.x version Rust supports and is not
+          # combined with the apt cross toolchain (those arm64 packages are
+          # built for Ubuntu 24.04's glibc 2.39).
+          gnu_seen=false
+          if [[ -n "$GLIBC_FLOOR" ]]; then
+            if [[ ! "$GLIBC_FLOOR" =~ ^[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::invalid glibc-floor: ${GLIBC_FLOOR} (expected MAJOR.MINOR, e.g. 2.31)"
+              exit 1
+            fi
+            if [[ "${GLIBC_FLOOR%%.*}" -ne 2 || "${GLIBC_FLOOR##*.}" -lt 17 ]]; then
+              echo "::error::unsupported glibc-floor: ${GLIBC_FLOOR} (expected 2.17 or newer within glibc 2.x; 2.17 is the oldest glibc Rust supports)"
+              exit 1
+            fi
+            if [[ "$CROSS_PACKAGES" != 'gcc-aarch64-linux-gnu' ]]; then
+              echo "::error::cross-packages is not used under glibc-floor: apt arm64 packages are built against Ubuntu 24.04's glibc 2.39 and cannot be linked under a lower floor; leave cross-packages at its default and vendor C dependencies instead"
+              exit 1
+            fi
+          fi
+
           entries=()
           seen=' '
           # word-split is intentional: whitespace-separated triples
@@ -179,6 +213,12 @@ jobs:
             if [[ "$t" == 'aarch64-pc-windows-msvc' ]]; then
               smoke_os='windows-11-arm'
             fi
+            zig=false
+            if [[ -n "$GLIBC_FLOOR" && "$t" == *-unknown-linux-gnu ]]; then
+              zig=true
+              cross=false
+              gnu_seen=true
+            fi
             case "$seen" in
               *" $t "*)
                 echo "::error::duplicate target: ${t}"
@@ -189,10 +229,14 @@ jobs:
             for i in "${!variant_names[@]}"; do
               entries+=("$(jq -cn --arg target "$t" --arg os "$os" --arg smoke_os "$smoke_os" \
                 --arg variant "${variant_names[$i]}" --arg features "${variant_flags[$i]}" \
-                --argjson cross "$cross" --argjson musl "$musl" \
-                '{target: $target, os: $os, smoke_os: $smoke_os, variant: $variant, features: $features} + (if $cross then {cross: true} else {} end) + (if $musl then {musl: true} else {} end)')")
+                --argjson cross "$cross" --argjson musl "$musl" --argjson zig "$zig" \
+                '{target: $target, os: $os, smoke_os: $smoke_os, variant: $variant, features: $features} + (if $cross then {cross: true} else {} end) + (if $musl then {musl: true} else {} end) + (if $zig then {zig: true} else {} end)')")
             done
           done
+          if [[ -n "$GLIBC_FLOOR" && "$gnu_seen" != true ]]; then
+            echo '::error::glibc-floor is set but targets has no *-unknown-linux-gnu triple'
+            exit 1
+          fi
           if [ "${#entries[@]}" -eq 0 ]; then
             echo '::error::targets is empty'
             exit 1
@@ -227,12 +271,39 @@ jobs:
           rust-version: ${{ inputs.rust-version }}
           working-directory: ${{ inputs.working-directory }}
           targets: ${{ matrix.target }}
-          cache-key: ${{ matrix.target }}
+          cache-key: ${{ matrix.target }}${{ matrix.zig && format('-glibc{0}', inputs.glibc-floor) || '' }}
 
       - name: Apply cargo-env
         uses: $/actions/parse-env-block
         with:
           block: ${{ inputs.cargo-env }}
+
+      - name: Install zig and cargo-zigbuild
+        if: matrix.zig
+        run: |
+          set -euo pipefail
+          if [[ "$(uname -sm)" != 'Linux x86_64' ]]; then
+            echo "::error::glibc-floor builds need a Linux x86_64 runner, got $(uname -sm)"
+            exit 1
+          fi
+          tools="$RUNNER_TEMP/glibc-floor-tools"
+          mkdir -p "$tools/zig" "$tools/bin"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+          curl -fsSL --retry 3 -o zig.tar.xz \
+            "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          curl -fsSL --retry 3 -o cargo-zigbuild.tar.xz \
+            "https://github.com/rust-cross/cargo-zigbuild/releases/download/v${ZIGBUILD_VERSION}/cargo-zigbuild-x86_64-unknown-linux-musl.tar.xz"
+          echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum -c
+          echo "${ZIGBUILD_SHA256}  cargo-zigbuild.tar.xz" | sha256sum -c
+          tar -xJf zig.tar.xz --strip-components=1 -C "$tools/zig"
+          tar -xJf cargo-zigbuild.tar.xz
+          install -m 0755 cargo-zigbuild-x86_64-unknown-linux-musl/cargo-zigbuild "$tools/bin/"
+          echo "$tools/zig" >>"$GITHUB_PATH"
+          echo "$tools/bin" >>"$GITHUB_PATH"
+          "$tools/zig/zig" version
+          "$tools/bin/cargo-zigbuild" --version
 
       - name: Setup ARM64 apt sources
         if: matrix.cross
@@ -266,6 +337,17 @@ jobs:
             CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
             ${{ inputs.cross-env }}
 
+      # Under glibc-floor the gnu targets have no `cross` key, so the apt
+      # cross steps above skip. cross-env still applies to the zig aarch64
+      # build — but the linker line must not: cargo-zigbuild only sets
+      # CARGO_TARGET_<T>_LINKER/CC_<target> when they are missing, so a
+      # pre-set linker would bypass zig.
+      - name: Apply cross-env
+        if: matrix.zig && matrix.target == 'aarch64-unknown-linux-gnu'
+        uses: $/actions/parse-env-block
+        with:
+          block: ${{ inputs.cross-env }}
+
       - name: Install musl tools
         if: matrix.musl
         uses: $/actions/apt-install
@@ -284,11 +366,26 @@ jobs:
           TARGET: ${{ matrix.target }}
           PACKAGE: ${{ inputs.package }}
           FEATURES: ${{ matrix.features }}
+          ZIG: ${{ matrix.zig }}
+          GLIBC_FLOOR: ${{ inputs.glibc-floor }}
         run: |
           set -euo pipefail
-          # word-split is intentional: FEATURES is a validated flag list
-          # shellcheck disable=SC2086
-          cargo build --release --locked --target "$TARGET" -p "$PACKAGE" $FEATURES
+          if [[ "$ZIG" == true ]]; then
+            # word-split is intentional: FEATURES is a validated flag list
+            # shellcheck disable=SC2086
+            cargo zigbuild --release --locked --target "$TARGET.$GLIBC_FLOOR" -p "$PACKAGE" $FEATURES
+          else
+            # word-split is intentional: FEATURES is a validated flag list
+            # shellcheck disable=SC2086
+            cargo build --release --locked --target "$TARGET" -p "$PACKAGE" $FEATURES
+          fi
+
+      - name: Check glibc floor
+        if: matrix.zig
+        uses: $/actions/glibc-floor
+        with:
+          binary: ${{ inputs.working-directory }}/target/${{ matrix.target }}/release/${{ inputs.bin }}
+          floor: ${{ inputs.glibc-floor }}
 
       - name: Package
         working-directory: ${{ inputs.working-directory }}

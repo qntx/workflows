@@ -1,0 +1,17 @@
+name: glibc-floor
+description: Fail when an ELF binary requires a GLIBC_x.y symbol version newer than the floor.
+inputs:
+  binary:
+    description: 'Path to the ELF binary to inspect.'
+    required: true
+  floor:
+    description: 'Newest allowed GLIBC_x.y version (MAJOR.MINOR, e.g. 2.31).'
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        BINARY: ${{ inputs.binary }}
+        FLOOR: ${{ inputs.floor }}
+      run: bash "$GITHUB_ACTION_PATH/check.sh" "$BINARY" "$FLOOR"

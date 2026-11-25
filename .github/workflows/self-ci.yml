@@ -136,6 +136,7 @@ jobs:
           bash actions/setup-rust/test.sh
           bash actions/setup-wasm/test.sh
           bash actions/ops-dependabot-enable/test.sh
+          bash actions/glibc-floor/test.sh
 
   tests:
     runs-on: ubuntu-latest
@@ -767,6 +768,144 @@ jobs:
           tar xzf fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu.tar.gz
           ./fixture-bin --version | grep -qx 'fixture-bin 0.1.0 (extra)'
 
+  # Same tag guard as e2e-release-rust. `artifact-prefix: glibc` keeps this
+  # call's uploads apart from the other release calls' artifacts.
+  e2e-release-rust-glibc:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    uses: $/.github/workflows/release-rust.yml
+    permissions:
+      contents: write
+    with:
+      working-directory: fixtures/release
+      bin: fixture-bin
+      package: fixture-bin
+      targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+      artifact-prefix: glibc
+      glibc-floor: '2.31'
+      variants: extra=--features extra
+      sbom: true
+      cross-env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=--cfg fixture_cross_env
+      smoke-command: --probe
+
+  e2e-release-rust-glibc-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: e2e-release-rust-glibc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Download glibc artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: glibc-*
+          merge-multiple: true
+          path: downloads
+
+      - name: Verify the exact asset set
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          expected=()
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            for v in '' '-extra'; do
+              stem="fixture-bin-0.0.0-dev$v-$t"
+              expected+=("$stem.tar.gz" "$stem.tar.gz.sha256" "$stem.cdx.json")
+            done
+          done
+          shopt -s nullglob
+          mapfile -t got < <(printf '%s\n' * | sort)
+          if ! diff <(printf '%s\n' "${expected[@]}" | sort) <(printf '%s\n' "${got[@]}"); then
+            echo '::error::glibc artifacts are not exactly the 2 gnu targets x {default, extra} x {archive, .sha256, .cdx.json}'
+            exit 1
+          fi
+          echo "asset set matches: ${#got[@]} files"
+
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
+
+      - name: Verify checksums and SBOMs
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          for f in *.sha256; do
+            sha256sum -c "$f"
+          done
+          for f in *.cdx.json; do
+            jq -e '.bomFormat == "CycloneDX"' "$f" >/dev/null
+          done
+          echo 'all checksums verify; all SBOMs are CycloneDX'
+
+      # readelf reads the foreign-arch aarch64 ELF fine; each archive gets
+      # its own directory so the binaries do not overwrite each other.
+      - name: Check every binary against the 2.31 floor
+        working-directory: downloads
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          for a in *.tar.gz; do
+            d="${a%.tar.gz}"
+            mkdir "$d"
+            tar xzf "$a" -C "$d"
+            bash "$WORKSPACE/actions/glibc-floor/check.sh" "$d/fixture-bin" 2.31
+          done
+
+      - name: Verify x86_64 binaries are dynamic glibc and probe
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          for d in fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu; do
+            info="$(file "$d/fixture-bin")"
+            echo "$info" | grep -q 'dynamically linked'
+            echo "$info" | grep -q '/lib64/ld-linux-x86-64.so.2'
+          done
+          probe="$(./fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu/fixture-bin --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: unset'
+          probe="$(./fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu/fixture-bin --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0 (extra)'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: unset'
+
+  e2e-release-rust-glibc-arm-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: e2e-release-rust-glibc
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Download aarch64 glibc artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: glibc-*aarch64-unknown-linux-gnu
+          merge-multiple: true
+          path: downloads
+
+      - name: Verify aarch64 binaries are dynamic glibc and probe
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          d=fixture-bin-0.0.0-dev-aarch64-unknown-linux-gnu
+          mkdir "$d"
+          tar xzf "$d.tar.gz" -C "$d"
+          file "$d/fixture-bin" | grep -q '/lib/ld-linux-aarch64.so.1'
+          probe="$("$d/fixture-bin" --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: applied'
+          d=fixture-bin-0.0.0-dev-extra-aarch64-unknown-linux-gnu
+          mkdir "$d"
+          tar xzf "$d.tar.gz" -C "$d"
+          file "$d/fixture-bin" | grep -q '/lib/ld-linux-aarch64.so.1'
+          probe="$("$d/fixture-bin" --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0 (extra)'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: applied'
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -839,6 +978,9 @@ jobs:
         e2e-deploy-cloudflare-versions,
         e2e-release-rust-extras,
         e2e-release-rust-extras-verify,
+        e2e-release-rust-glibc,
+        e2e-release-rust-glibc-verify,
+        e2e-release-rust-glibc-arm-verify,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -881,7 +1023,10 @@ jobs:
           || needs.e2e-deploy-cloudflare.result != 'success'
           || needs.e2e-deploy-cloudflare-versions.result != 'success'
           || needs.e2e-release-rust-extras.result != 'success'
-          || needs.e2e-release-rust-extras-verify.result != 'success' }}
+          || needs.e2e-release-rust-extras-verify.result != 'success'
+          || needs.e2e-release-rust-glibc.result != 'success'
+          || needs.e2e-release-rust-glibc-verify.result != 'success'
+          || needs.e2e-release-rust-glibc-arm-verify.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1
