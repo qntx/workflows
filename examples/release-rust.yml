@@ -1,0 +1,25 @@
+# Caller owns on:. Pin at @v2.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: qntx/workflows/.github/workflows/release-rust.yml@v2
+    with:
+      bin: mycli
+      package: mycli
+      # Both gnu targets build with cargo-zigbuild for <triple>.2.31 and the
+      # build fails if a binary needs a newer GLIBC_x.y.
+      glibc-floor: '2.31'
+      smoke-command: --version
+      # Runs the gnu smoke inside debian:11 (multi-arch index digest for
+      # amd64 + arm64/v8) — proves the 2.31 floor on the oldest glibc allowed.
+      smoke-image: debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
+      # checksums-file: true
+      # sbom: true

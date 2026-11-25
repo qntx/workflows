@@ -74,6 +74,13 @@ drift test fails if its Package step stops producing the canonical layout.
 The binary member must be a regular file, with no link entries, absolute
 paths or `..` components.
 
+`glibc-floor` and `smoke-image` change neither asset names nor the archive
+layout, and the glibc requirement a build was produced under is not encoded
+in the name: `fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu.tar.gz` parses
+the same whether it was built natively on ubuntu-24.04 or against a zig
+floor. The contract file `contract/release-assets.json` is unchanged by
+that work.
+
 ## Versioning
 
 The `version` field in the JSON bumps on breaking grammar changes. Adding a
