@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-11-25
+
 ### Added
 
 - `contract/release-assets.json` and `contract/release-assets.ts`: the machine-readable naming contract for the GitHub Release assets `release-rust.yml` publishes — `<bin>-<version>[-<variant>]-<target>.<ext>` plus `.sha256` / `.cdx.json` sidecars and the `SHA256SUMS` aggregate — with a reference parser, a `check` / `triples` CLI, and [docs/RELEASE-ASSETS.md](docs/RELEASE-ASSETS.md). Inside-namespace names that do not parse are loud drift, not skippable extras. A `layout` key lists the allowed binary locations inside an archive (`./<bin>` or `<stem>/<bin>`). qntx/sh vendors the file byte-for-byte (#129).
