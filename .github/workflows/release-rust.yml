@@ -280,6 +280,7 @@ jobs:
 
       - name: Install zig and cargo-zigbuild
         if: matrix.zig
+        timeout-minutes: 10
         run: |
           set -euo pipefail
           if [[ "$(uname -sm)" != 'Linux x86_64' ]]; then
@@ -291,11 +292,27 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           cd "$tmp"
-          curl -fsSL --retry 3 -o zig.tar.xz \
-            "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
-          curl -fsSL --retry 3 -o cargo-zigbuild.tar.xz \
+          # ziglang.org throttles CI downloads; try the Fastly mirror from
+          # ziglang.org/download/community-mirrors.txt first. The pinned
+          # sha256 is what makes any source trustworthy.
+          zig_file="zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          zig_ok=false
+          for url in \
+            "https://ziglang.freetls.fastly.net/${zig_file}" \
+            "https://ziglang.org/download/${ZIG_VERSION}/${zig_file}"; do
+            if curl -fsSL --retry 3 --max-time 240 -o zig.tar.xz "$url" \
+              && echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum -c; then
+              zig_ok=true
+              break
+            fi
+            echo "::warning::zig download from ${url} failed or did not verify"
+          done
+          if [[ "$zig_ok" != true ]]; then
+            echo "::error::could not download a verified ${zig_file}"
+            exit 1
+          fi
+          curl -fsSL --retry 3 --max-time 240 -o cargo-zigbuild.tar.xz \
             "https://github.com/rust-cross/cargo-zigbuild/releases/download/v${ZIGBUILD_VERSION}/cargo-zigbuild-x86_64-unknown-linux-musl.tar.xz"
-          echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum -c
           echo "${ZIGBUILD_SHA256}  cargo-zigbuild.tar.xz" | sha256sum -c
           tar -xJf zig.tar.xz --strip-components=1 -C "$tools/zig"
           tar -xJf cargo-zigbuild.tar.xz
