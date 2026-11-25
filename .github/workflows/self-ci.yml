@@ -782,6 +782,7 @@ jobs:
       targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
       artifact-prefix: glibc
       glibc-floor: '2.31'
+      smoke-image: debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
       variants: extra=--features extra
       sbom: true
       cross-env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=--cfg fixture_cross_env
@@ -794,6 +795,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
     steps:
       # Checkout cleans the workspace, so it must come before the downloads.
       - uses: $/actions/hardened-checkout
@@ -871,6 +873,44 @@ jobs:
           probe="$(./fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu/fixture-bin --probe)"
           sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0 (extra)'
           sed -n '3p' <<<"$probe" | grep -qx 'cross-env: unset'
+
+      # The os-release line is the proof the binary ran inside the
+      # container: the smoke host is Ubuntu 24.04, and that string appears
+      # nowhere in the step script, so only the mounted binary's --probe
+      # output can produce it.
+      - name: Assert the gnu smoke ran in debian:11
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          image='debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke x86_64-unknown-linux-gnu' \
+            "smoke: x86_64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: unset'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke extra x86_64-unknown-linux-gnu' \
+            "smoke: x86_64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0 (extra)' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: unset'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke aarch64-unknown-linux-gnu' \
+            "smoke: aarch64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: applied'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke extra aarch64-unknown-linux-gnu' \
+            "smoke: aarch64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0 (extra)' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: applied'
 
   e2e-release-rust-glibc-arm-verify:
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}

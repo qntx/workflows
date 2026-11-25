@@ -71,6 +71,11 @@ on:
         required: false
         type: string
         default: ''
+      smoke-image:
+        description: 'Digest-pinned container image (<name>[:<tag>]@sha256:<64 hex>) in which smoke-command runs for the *-unknown-linux-gnu targets: docker run --rm --network none with the extracted archive mounted read-only at /smoke, on the per-target smoke runner (aarch64 runs natively on ubuntu-24.04-arm). Requires smoke-command. Other targets smoke on the host. Use it with glibc-floor to prove the floor, e.g. debian:11 with 2.31.'
+        required: false
+        type: string
+        default: ''
     outputs:
       release-url:
         description: 'URL of the created GitHub Release.'
@@ -118,6 +123,7 @@ jobs:
           SMOKE_COMMAND: ${{ inputs.smoke-command }}
           GLIBC_FLOOR: ${{ inputs.glibc-floor }}
           CROSS_PACKAGES: ${{ inputs.cross-packages }}
+          SMOKE_IMAGE: ${{ inputs.smoke-image }}
         run: |
           set -euo pipefail
 
@@ -193,6 +199,18 @@ jobs:
             fi
           fi
 
+          # smoke-image changes only how gnu targets smoke, never the matrix.
+          if [[ -n "$SMOKE_IMAGE" ]]; then
+            if [[ ! "$SMOKE_IMAGE" =~ ^[A-Za-z0-9][A-Za-z0-9._/:-]*@sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::smoke-image must be digest-pinned: <name>[:<tag>]@sha256:<64 lowercase hex>, got ${SMOKE_IMAGE}"
+              exit 1
+            fi
+            if [[ -z "${SMOKE_COMMAND//[[:space:]]/}" ]]; then
+              echo '::error::smoke-image requires smoke-command'
+              exit 1
+            fi
+          fi
+
           entries=()
           seen=' '
           # word-split is intentional: whitespace-separated triples
@@ -217,10 +235,12 @@ jobs:
               smoke_os='windows-11-arm'
             fi
             zig=false
-            if [[ -n "$GLIBC_FLOOR" && "$t" == *-unknown-linux-gnu ]]; then
-              zig=true
-              cross=false
+            if [[ "$t" == *-unknown-linux-gnu ]]; then
               gnu_seen=true
+              if [[ -n "$GLIBC_FLOOR" ]]; then
+                zig=true
+                cross=false
+              fi
             fi
             case "$seen" in
               *" $t "*)
@@ -238,6 +258,10 @@ jobs:
           done
           if [[ -n "$GLIBC_FLOOR" && "$gnu_seen" != true ]]; then
             echo '::error::glibc-floor is set but targets has no *-unknown-linux-gnu triple'
+            exit 1
+          fi
+          if [[ -n "$SMOKE_IMAGE" && "$gnu_seen" != true ]]; then
+            echo '::error::smoke-image is set but targets has no *-unknown-linux-gnu triple'
             exit 1
           fi
           if [ "${#entries[@]}" -eq 0 ]; then
@@ -526,6 +550,7 @@ jobs:
           BIN: ${{ inputs.bin }}
           TARGET: ${{ matrix.target }}
           SMOKE_COMMAND: ${{ inputs.smoke-command }}
+          SMOKE_IMAGE: ${{ inputs.smoke-image }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -547,9 +572,18 @@ jobs:
             tar xzf "$archive"
             exe="./$BIN"
           fi
-          # word-split is intentional: whitespace-separated smoke arguments
-          # shellcheck disable=SC2086
-          "$exe" $SMOKE_COMMAND
+          if [[ -n "$SMOKE_IMAGE" && "$TARGET" == *-unknown-linux-gnu ]]; then
+            echo "smoke: ${TARGET} in ${SMOKE_IMAGE} (--network none, archive mounted read-only)"
+            docker pull --quiet "$SMOKE_IMAGE"
+            # word-split is intentional: whitespace-separated smoke arguments
+            # shellcheck disable=SC2086
+            docker run --rm --network none -v "$PWD:/smoke:ro" -w /smoke --entrypoint "/smoke/$BIN" "$SMOKE_IMAGE" $SMOKE_COMMAND
+            echo "Smoke \`${TARGET}\` in \`${SMOKE_IMAGE}\`: ok" >>"$GITHUB_STEP_SUMMARY"
+          else
+            # word-split is intentional: whitespace-separated smoke arguments
+            # shellcheck disable=SC2086
+            "$exe" $SMOKE_COMMAND
+          fi
 
   release:
     needs: [build, smoke]

@@ -16,6 +16,7 @@ interface PlanEnv {
   SMOKE_COMMAND: string;
   GLIBC_FLOOR: string;
   CROSS_PACKAGES: string;
+  SMOKE_IMAGE: string;
 }
 
 interface PlanResult {
@@ -32,6 +33,7 @@ const DEFAULT_ENV: PlanEnv = {
   SMOKE_COMMAND: '',
   GLIBC_FLOOR: '',
   CROSS_PACKAGES: 'gcc-aarch64-linux-gnu',
+  SMOKE_IMAGE: '',
 };
 
 const { planRun } = loadReleaseRust();
@@ -231,5 +233,66 @@ describe('glibc-floor validation', () => {
   test('floor 2.17 (the Rust minimum) is accepted', () => {
     const res = runPlan({ GLIBC_FLOOR: '2.17' });
     expect(res.code).toBe(0);
+  });
+});
+
+describe('smoke-image', () => {
+  const PINNED =
+    'debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9';
+  const DIGEST =
+    '6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9';
+
+  // The image only steers the smoke step's docker path; it must never
+  // change the plan matrix, so the output is compared against the same
+  // inputs with SMOKE_IMAGE empty.
+  for (const extra of [{}, { GLIBC_FLOOR: '2.31' }]) {
+    const label =
+      'GLIBC_FLOOR' in extra ? 'with glibc-floor 2.31' : 'without glibc-floor';
+    test(`a digest-pinned image is accepted (${label}) and leaves the matrix unchanged`, () => {
+      const env = { SMOKE_COMMAND: '--version', ...extra };
+      const without = runPlan(env);
+      const withImage = runPlan({ ...env, SMOKE_IMAGE: PINNED });
+      expect(without.code).toBe(0);
+      expect(withImage.code).toBe(0);
+      expect(withImage.matrixLine).toBe(without.matrixLine);
+    });
+  }
+
+  const badImages: { name: string; image: string }[] = [
+    { name: 'no digest', image: 'debian:11' },
+    { name: '63-hex digest', image: `debian:11@sha256:${DIGEST.slice(1)}` },
+    {
+      name: 'uppercase hex digest',
+      image: `debian:11@sha256:${DIGEST.toUpperCase()}`,
+    },
+    { name: 'leading dash', image: `-debian@sha256:${DIGEST}` },
+    { name: 'embedded space', image: `debian: 11@sha256:${DIGEST}` },
+  ];
+  for (const { name, image } of badImages) {
+    test(`rejects an image that is not digest-pinned (${name})`, () => {
+      const res = runPlan({ SMOKE_COMMAND: '--version', SMOKE_IMAGE: image });
+      expect(res.code).not.toBe(0);
+      expect(res.output).toContain(
+        `::error::smoke-image must be digest-pinned: <name>[:<tag>]@sha256:<64 lowercase hex>, got ${image}`,
+      );
+    });
+  }
+
+  test('rejects an image without smoke-command', () => {
+    const res = runPlan({ SMOKE_IMAGE: PINNED });
+    expect(res.code).not.toBe(0);
+    expect(res.output).toContain('::error::smoke-image requires smoke-command');
+  });
+
+  test('rejects an image when targets has no gnu triple', () => {
+    const res = runPlan({
+      TARGETS: 'aarch64-apple-darwin x86_64-unknown-linux-musl',
+      SMOKE_COMMAND: '--version',
+      SMOKE_IMAGE: PINNED,
+    });
+    expect(res.code).not.toBe(0);
+    expect(res.output).toContain(
+      '::error::smoke-image is set but targets has no *-unknown-linux-gnu triple',
+    );
   });
 });
