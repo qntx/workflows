@@ -95,6 +95,9 @@ env:
   # env vars into its cache key, so a CARGO_* name would invalidate every
   # caller's cache.
   ZIG_VERSION: '0.17.1'
+  # ZIG_WHEEL_SHA256: ziglang-0.17.1 manylinux x86_64 wheel (uploaded to PyPI
+  # 2026-11-05); ZIG_SHA256: zig-x86_64-linux-0.17.1.tar.xz.
+  ZIG_WHEEL_SHA256: 'ea6cc5d87b033cf0aedfbc8f9549a908cae6c50ac31f1698188fa48a74524b54'
   ZIG_SHA256: '3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a'
   ZIGBUILD_VERSION: '0.24.1'
   ZIGBUILD_SHA256: 'f09b180a517af0e4dd4bffc921bb88e5ab705452a9dd948c61e489b3020c68c2'
@@ -292,29 +295,33 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           cd "$tmp"
-          # ziglang.org throttles CI downloads; try the Fastly mirror from
-          # ziglang.org/download/community-mirrors.txt first. The pinned
-          # sha256 is what makes any source trustworthy.
-          zig_file="zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          # zig comes from the official ziglang PyPI wheel
+          # (codeberg.org/ziglang/zig-pypi) on PyPI's CDN, falling back to the
+          # ziglang.org tarball via its Fastly mirror: ziglang.org throttles
+          # CI downloads. Each source is pinned by its own sha256.
           zig_ok=false
-          for url in \
-            "https://ziglang.freetls.fastly.net/${zig_file}" \
-            "https://ziglang.org/download/${ZIG_VERSION}/${zig_file}"; do
-            if curl -fsSL --retry 3 --max-time 240 -o zig.tar.xz "$url" \
+          if curl -fsSL --retry 2 --max-time 180 -o zig.whl \
+            "https://files.pythonhosted.org/packages/py3/z/ziglang/ziglang-${ZIG_VERSION}-py3-none-manylinux_2_12_x86_64.manylinux2010_x86_64.musllinux_1_1_x86_64.whl" \
+            && echo "${ZIG_WHEEL_SHA256}  zig.whl" | sha256sum -c; then
+            unzip -q zig.whl 'ziglang/*'
+            cp -a ziglang/. "$tools/zig/"
+            zig_ok=true
+          else
+            echo '::warning::zig wheel download failed or did not verify; trying the tarball'
+            if curl -fsSL --retry 2 --max-time 240 -o zig.tar.xz \
+              "https://ziglang.freetls.fastly.net/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" \
               && echo "${ZIG_SHA256}  zig.tar.xz" | sha256sum -c; then
+              tar -xJf zig.tar.xz --strip-components=1 -C "$tools/zig"
               zig_ok=true
-              break
             fi
-            echo "::warning::zig download from ${url} failed or did not verify"
-          done
+          fi
           if [[ "$zig_ok" != true ]]; then
-            echo "::error::could not download a verified ${zig_file}"
+            echo "::error::could not download a verified zig ${ZIG_VERSION}"
             exit 1
           fi
           curl -fsSL --retry 3 --max-time 240 -o cargo-zigbuild.tar.xz \
             "https://github.com/rust-cross/cargo-zigbuild/releases/download/v${ZIGBUILD_VERSION}/cargo-zigbuild-x86_64-unknown-linux-musl.tar.xz"
           echo "${ZIGBUILD_SHA256}  cargo-zigbuild.tar.xz" | sha256sum -c
-          tar -xJf zig.tar.xz --strip-components=1 -C "$tools/zig"
           tar -xJf cargo-zigbuild.tar.xz
           install -m 0755 cargo-zigbuild-x86_64-unknown-linux-musl/cargo-zigbuild "$tools/bin/"
           echo "$tools/zig" >>"$GITHUB_PATH"
