@@ -136,6 +136,7 @@ jobs:
           bash actions/setup-rust/test.sh
           bash actions/setup-wasm/test.sh
           bash actions/ops-dependabot-enable/test.sh
+          bash actions/glibc-floor/test.sh
 
   tests:
     runs-on: ubuntu-latest
@@ -767,6 +768,353 @@ jobs:
           tar xzf fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu.tar.gz
           ./fixture-bin --version | grep -qx 'fixture-bin 0.1.0 (extra)'
 
+  # Same tag guard as e2e-release-rust. `artifact-prefix: glibc` keeps this
+  # call's uploads apart from the other release calls' artifacts.
+  # The glibc job set proves three things: (a) the 'Check glibc floor' step
+  # ran and printed its verdict in every callee build — step conclusions via
+  # assert-gates plus the verdict line in the job log; (b) the gnu smoke
+  # actually ran inside the pinned debian:11 image — the container's
+  # os-release string appears only in the binary's --probe output in the
+  # smoke job logs; and (c) the floor check can fail — the same fixture
+  # built without a floor (the e2e-release-rust dist artifacts) reports a
+  # GLIBC need newer than 2.31 and cannot start inside debian:11.
+  e2e-release-rust-glibc:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    uses: $/.github/workflows/release-rust.yml
+    permissions:
+      contents: write
+    with:
+      working-directory: fixtures/release
+      bin: fixture-bin
+      package: fixture-bin
+      targets: x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+      artifact-prefix: glibc
+      glibc-floor: '2.31'
+      smoke-image: debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
+      variants: extra=--features extra
+      sbom: true
+      cross-env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=--cfg fixture_cross_env
+      smoke-command: --probe
+
+  e2e-release-rust-glibc-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: [e2e-release-rust, e2e-release-rust-glibc]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Checkout cleans the workspace, so it must come before the downloads.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Download glibc artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: glibc-*
+          merge-multiple: true
+          path: downloads
+
+      # The same fixture built without a floor by the e2e-release-rust call:
+      # the negative control for the floor check below.
+      - name: Download the no-floor x86_64 artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-x86_64-unknown-linux-gnu
+          path: nofloor
+
+      - name: Verify the exact asset set
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          expected=()
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            for v in '' '-extra'; do
+              stem="fixture-bin-0.0.0-dev$v-$t"
+              expected+=("$stem.tar.gz" "$stem.tar.gz.sha256" "$stem.cdx.json")
+            done
+          done
+          shopt -s nullglob
+          mapfile -t got < <(printf '%s\n' * | sort)
+          if ! diff <(printf '%s\n' "${expected[@]}" | sort) <(printf '%s\n' "${got[@]}"); then
+            echo '::error::glibc artifacts are not exactly the 2 gnu targets x {default, extra} x {archive, .sha256, .cdx.json}'
+            exit 1
+          fi
+          echo "asset set matches: ${#got[@]} files"
+
+      - name: Check asset names against the contract
+        run: bun contract/release-assets.ts check --bin fixture-bin --version 0.0.0-dev downloads/*
+
+      - name: Verify checksums and SBOMs
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          for f in *.sha256; do
+            sha256sum -c "$f"
+          done
+          for f in *.cdx.json; do
+            jq -e '.bomFormat == "CycloneDX"' "$f" >/dev/null
+          done
+          echo 'all checksums verify; all SBOMs are CycloneDX'
+
+      # readelf reads the foreign-arch aarch64 ELF fine; each archive gets
+      # its own directory so the binaries do not overwrite each other.
+      - name: Check every binary against the 2.31 floor
+        working-directory: downloads
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          for a in *.tar.gz; do
+            d="${a%.tar.gz}"
+            mkdir "$d"
+            tar xzf "$a" -C "$d"
+            bash "$WORKSPACE/actions/glibc-floor/check.sh" "$d/fixture-bin" 2.31
+          done
+
+      - name: Verify x86_64 binaries are dynamic glibc and probe
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          for d in fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu; do
+            info="$(file "$d/fixture-bin")"
+            echo "$info" | grep -q 'dynamically linked'
+            echo "$info" | grep -q '/lib64/ld-linux-x86-64.so.2'
+          done
+          probe="$(./fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu/fixture-bin --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: unset'
+          probe="$(./fixture-bin-0.0.0-dev-extra-x86_64-unknown-linux-gnu/fixture-bin --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0 (extra)'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: unset'
+
+      # The os-release line is the proof the binary ran inside the
+      # container: the smoke host is Ubuntu 24.04, and that string appears
+      # nowhere in the step script, so only the mounted binary's --probe
+      # output can produce it.
+      - name: Assert the gnu smoke ran in debian:11
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          image='debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke x86_64-unknown-linux-gnu' \
+            "smoke: x86_64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: unset'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke extra x86_64-unknown-linux-gnu' \
+            "smoke: x86_64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0 (extra)' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: unset'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke aarch64-unknown-linux-gnu' \
+            "smoke: aarch64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: applied'
+          bash fixtures/release/assert-job-log.sh \
+            'e2e-release-rust-glibc / Smoke extra aarch64-unknown-linux-gnu' \
+            "smoke: aarch64-unknown-linux-gnu in ${image}" \
+            'fixture-bin 0.1.0 (extra)' \
+            'os-release: Debian GNU/Linux 11 (bullseye)' \
+            'cross-env: applied'
+
+      # (a): the floor assertion really ran. Step conclusions prove the zig
+      # path was taken and the apt cross path skipped; the log substrings
+      # are the verdict line check.sh prints — the composite's run line
+      # contains neither, so only its output can match.
+      - name: Assert the floor ran in every glibc build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          for v in '' 'extra '; do
+            for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+              job="e2e-release-rust-glibc / Build ${v}${t}"
+              bash fixtures/gates/assert-gates.sh "$job" \
+                'Install zig and cargo-zigbuild=success' \
+                'Check glibc floor=success' \
+                'Setup ARM64 apt sources=skipped' \
+                'Install cross packages=skipped' \
+                'Apply cross linker and cross-env=skipped'
+              if [[ "$t" == aarch64-* ]]; then cross_env=success; else cross_env=skipped; fi
+              bash fixtures/gates/assert-gates.sh "$job" "Apply cross-env=${cross_env}"
+              bash fixtures/release/assert-job-log.sh "$job" \
+                "glibc-floor: fixtures/release/target/${t}/release/fixture-bin needs GLIBC_" \
+                ' <= floor 2.31'
+            done
+          done
+          # Control on the unchanged no-floor path: the apt cross steps must
+          # still run there and the zig steps must not.
+          bash fixtures/gates/assert-gates.sh \
+            'e2e-release-rust / Build aarch64-unknown-linux-gnu' \
+            'Setup ARM64 apt sources=success' \
+            'Install cross packages=success' \
+            'Apply cross linker and cross-env=success' \
+            'Install zig and cargo-zigbuild=skipped' \
+            'Check glibc floor=skipped' \
+            'Apply cross-env=skipped'
+          bash fixtures/gates/assert-gates.sh \
+            'e2e-release-rust / Build x86_64-unknown-linux-gnu' \
+            'Install zig and cargo-zigbuild=skipped' \
+            'Check glibc floor=skipped'
+
+      - name: Prove the floor check and debian:11 reject the no-floor build
+        env:
+          # Must match the smoke-image passed to e2e-release-rust-glibc:
+          # `with:` cannot read env.
+          IMAGE: debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
+        run: |
+          set -euo pipefail
+          tar xzf nofloor/fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu.tar.gz -C nofloor
+
+          if out="$(bash actions/glibc-floor/check.sh nofloor/fixture-bin 2.31 2>&1)"; then
+            echo "::error::check.sh passed on the no-floor build: ${out}"
+            exit 1
+          fi
+          echo "$out"
+          grep -q 'newer than the floor 2.31' <<<"$out"
+          newest="$(sed -n 's/.*needs GLIBC_\([0-9.]*\),.*/\1/p' <<<"$out")"
+          [[ -n "$newest" ]] || {
+            echo '::error::could not parse the newest GLIBC need'
+            exit 1
+          }
+          if [[ "$(printf '%s\n%s\n' "$newest" '2.31' | sort -V | tail -n 1)" != "$newest" || "$newest" == '2.31' ]]; then
+            echo "::error::no-floor newest ${newest} is not newer than 2.31"
+            exit 1
+          fi
+          echo "no-floor build newest GLIBC need: ${newest} (> 2.31)"
+
+          docker pull "$IMAGE"
+          set +e
+          out="$(docker run --rm --network none -v "$PWD/nofloor:/smoke:ro" \
+            --entrypoint /smoke/fixture-bin "$IMAGE" --probe 2>&1)"
+          code=$?
+          set -e
+          echo "$out"
+          if [[ $code -eq 0 ]]; then
+            echo '::error::the no-floor binary started inside debian:11'
+            exit 1
+          fi
+          grep -q 'GLIBC_2\.' <<<"$out"
+          grep -q 'not found' <<<"$out"
+          echo "no-floor binary fails to start inside debian:11 (exit ${code})"
+
+          # Positive control: the floor-built binary runs in the same image
+          # with the same flags (extracted by an earlier step).
+          out="$(docker run --rm --network none \
+            -v "$PWD/downloads/fixture-bin-0.0.0-dev-x86_64-unknown-linux-gnu:/smoke:ro" \
+            --entrypoint /smoke/fixture-bin "$IMAGE" --probe)"
+          echo "$out"
+          grep -q 'os-release: Debian GNU/Linux 11 (bullseye)' <<<"$out"
+          echo 'floor-built binary runs inside debian:11'
+
+  e2e-release-rust-glibc-arm-verify:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: [e2e-release-rust, e2e-release-rust-glibc]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Needed for check.sh in the no-floor proof below.
+      - uses: $/actions/hardened-checkout
+        with:
+          persist-credentials: false
+      - name: Download aarch64 glibc artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: glibc-*aarch64-unknown-linux-gnu
+          merge-multiple: true
+          path: downloads
+
+      - name: Download the no-floor aarch64 artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-aarch64-unknown-linux-gnu
+          path: nofloor
+
+      - name: Verify aarch64 binaries are dynamic glibc and probe
+        working-directory: downloads
+        run: |
+          set -euo pipefail
+          d=fixture-bin-0.0.0-dev-aarch64-unknown-linux-gnu
+          mkdir "$d"
+          tar xzf "$d.tar.gz" -C "$d"
+          file "$d/fixture-bin" | grep -q '/lib/ld-linux-aarch64.so.1'
+          probe="$("$d/fixture-bin" --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: applied'
+          d=fixture-bin-0.0.0-dev-extra-aarch64-unknown-linux-gnu
+          mkdir "$d"
+          tar xzf "$d.tar.gz" -C "$d"
+          file "$d/fixture-bin" | grep -q '/lib/ld-linux-aarch64.so.1'
+          probe="$("$d/fixture-bin" --probe)"
+          sed -n '1p' <<<"$probe" | grep -qx 'fixture-bin 0.1.0 (extra)'
+          sed -n '3p' <<<"$probe" | grep -qx 'cross-env: applied'
+
+      - name: Prove the floor check and debian:11 reject the no-floor build
+        env:
+          # Must match the smoke-image passed to e2e-release-rust-glibc:
+          # `with:` cannot read env.
+          IMAGE: debian:11@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
+        run: |
+          set -euo pipefail
+          tar xzf nofloor/fixture-bin-0.0.0-dev-aarch64-unknown-linux-gnu.tar.gz -C nofloor
+
+          if out="$(bash actions/glibc-floor/check.sh nofloor/fixture-bin 2.31 2>&1)"; then
+            echo "::error::check.sh passed on the no-floor build: ${out}"
+            exit 1
+          fi
+          echo "$out"
+          grep -q 'newer than the floor 2.31' <<<"$out"
+          newest="$(sed -n 's/.*needs GLIBC_\([0-9.]*\),.*/\1/p' <<<"$out")"
+          [[ -n "$newest" ]] || {
+            echo '::error::could not parse the newest GLIBC need'
+            exit 1
+          }
+          if [[ "$(printf '%s\n%s\n' "$newest" '2.31' | sort -V | tail -n 1)" != "$newest" || "$newest" == '2.31' ]]; then
+            echo "::error::no-floor newest ${newest} is not newer than 2.31"
+            exit 1
+          fi
+          echo "no-floor build newest GLIBC need: ${newest} (> 2.31)"
+
+          docker pull "$IMAGE"
+          set +e
+          out="$(docker run --rm --network none -v "$PWD/nofloor:/smoke:ro" \
+            --entrypoint /smoke/fixture-bin "$IMAGE" --probe 2>&1)"
+          code=$?
+          set -e
+          echo "$out"
+          if [[ $code -eq 0 ]]; then
+            echo '::error::the no-floor binary started inside debian:11'
+            exit 1
+          fi
+          grep -q 'GLIBC_2\.' <<<"$out"
+          grep -q 'not found' <<<"$out"
+          echo "no-floor binary fails to start inside debian:11 (exit ${code})"
+
+          # Positive control: the floor-built binary runs in the same image
+          # with the same flags (extracted by the probe step above).
+          out="$(docker run --rm --network none \
+            -v "$PWD/downloads/fixture-bin-0.0.0-dev-aarch64-unknown-linux-gnu:/smoke:ro" \
+            --entrypoint /smoke/fixture-bin "$IMAGE" --probe)"
+          echo "$out"
+          grep -q 'os-release: Debian GNU/Linux 11 (bullseye)' <<<"$out"
+          echo 'floor-built binary runs inside debian:11'
+
   scorecard:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -839,6 +1187,9 @@ jobs:
         e2e-deploy-cloudflare-versions,
         e2e-release-rust-extras,
         e2e-release-rust-extras-verify,
+        e2e-release-rust-glibc,
+        e2e-release-rust-glibc-verify,
+        e2e-release-rust-glibc-arm-verify,
       ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -881,7 +1232,10 @@ jobs:
           || needs.e2e-deploy-cloudflare.result != 'success'
           || needs.e2e-deploy-cloudflare-versions.result != 'success'
           || needs.e2e-release-rust-extras.result != 'success'
-          || needs.e2e-release-rust-extras-verify.result != 'success' }}
+          || needs.e2e-release-rust-extras-verify.result != 'success'
+          || needs.e2e-release-rust-glibc.result != 'success'
+          || needs.e2e-release-rust-glibc-verify.result != 'success'
+          || needs.e2e-release-rust-glibc-arm-verify.result != 'success' }}
         run: |
           echo '::error::a required Self / CI job failed, was cancelled, or was skipped'
           exit 1

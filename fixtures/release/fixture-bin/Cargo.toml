@@ -8,3 +8,6 @@ description = "qntx/workflows e2e fixture binary"
 
 [features]
 extra = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fixture_cross_env)'] }

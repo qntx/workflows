@@ -1,0 +1,47 @@
+[
+  {
+    "name": "default five targets",
+    "env": {
+      "TARGETS": "x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc",
+      "VARIANTS": "",
+      "SMOKE_COMMAND": ""
+    },
+    "output": "matrix={\"include\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"cross\":true},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"\",\"features\":\"\"}]}"
+  },
+  {
+    "name": "all seven triples",
+    "env": {
+      "TARGETS": "x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc x86_64-unknown-linux-musl aarch64-unknown-linux-musl",
+      "VARIANTS": "",
+      "SMOKE_COMMAND": ""
+    },
+    "output": "matrix={\"include\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"cross\":true},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-unknown-linux-musl\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\",\"musl\":true},{\"target\":\"aarch64-unknown-linux-musl\",\"os\":\"ubuntu-24.04-arm\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"musl\":true}]}"
+  },
+  {
+    "name": "gnu plus darwin",
+    "env": {
+      "TARGETS": "x86_64-unknown-linux-gnu aarch64-apple-darwin",
+      "VARIANTS": "",
+      "SMOKE_COMMAND": ""
+    },
+    "output": "matrix={\"include\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"\",\"features\":\"\"}]}"
+  },
+  {
+    "name": "two gnu plus windows with variant and smoke",
+    "env": {
+      "TARGETS": "x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-pc-windows-msvc",
+      "VARIANTS": "extra=--features extra",
+      "SMOKE_COMMAND": "--version"
+    },
+    "output": "matrix={\"include\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"extra\",\"features\":\"--features extra\"},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"cross\":true},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"extra\",\"features\":\"--features extra\",\"cross\":true},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"extra\",\"features\":\"--features extra\"}]}"
+  },
+  {
+    "name": "all seven with two variants",
+    "env": {
+      "TARGETS": "x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-pc-windows-msvc aarch64-pc-windows-msvc x86_64-unknown-linux-musl aarch64-unknown-linux-musl",
+      "VARIANTS": "extra=--features extra\nmin=--no-default-features",
+      "SMOKE_COMMAND": ""
+    },
+    "output": "matrix={\"include\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"extra\",\"features\":\"--features extra\"},{\"target\":\"x86_64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"min\",\"features\":\"--no-default-features\"},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"cross\":true},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"extra\",\"features\":\"--features extra\",\"cross\":true},{\"target\":\"aarch64-unknown-linux-gnu\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"min\",\"features\":\"--no-default-features\",\"cross\":true},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"extra\",\"features\":\"--features extra\"},{\"target\":\"aarch64-apple-darwin\",\"os\":\"macos-latest\",\"smoke_os\":\"macos-latest\",\"variant\":\"min\",\"features\":\"--no-default-features\"},{\"target\":\"x86_64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-latest\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"x86_64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-latest\",\"variant\":\"extra\",\"features\":\"--features extra\"},{\"target\":\"x86_64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-latest\",\"variant\":\"min\",\"features\":\"--no-default-features\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"\",\"features\":\"\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"extra\",\"features\":\"--features extra\"},{\"target\":\"aarch64-pc-windows-msvc\",\"os\":\"windows-latest\",\"smoke_os\":\"windows-11-arm\",\"variant\":\"min\",\"features\":\"--no-default-features\"},{\"target\":\"x86_64-unknown-linux-musl\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"\",\"features\":\"\",\"musl\":true},{\"target\":\"x86_64-unknown-linux-musl\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"extra\",\"features\":\"--features extra\",\"musl\":true},{\"target\":\"x86_64-unknown-linux-musl\",\"os\":\"ubuntu-24.04\",\"smoke_os\":\"ubuntu-24.04\",\"variant\":\"min\",\"features\":\"--no-default-features\",\"musl\":true},{\"target\":\"aarch64-unknown-linux-musl\",\"os\":\"ubuntu-24.04-arm\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"\",\"features\":\"\",\"musl\":true},{\"target\":\"aarch64-unknown-linux-musl\",\"os\":\"ubuntu-24.04-arm\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"extra\",\"features\":\"--features extra\",\"musl\":true},{\"target\":\"aarch64-unknown-linux-musl\",\"os\":\"ubuntu-24.04-arm\",\"smoke_os\":\"ubuntu-24.04-arm\",\"variant\":\"min\",\"features\":\"--no-default-features\",\"musl\":true}]}"
+  }
+]

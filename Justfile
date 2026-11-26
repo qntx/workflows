@@ -39,6 +39,7 @@ test-composites:
     bash actions/setup-rust/test.sh
     bash actions/setup-wasm/test.sh
     bash actions/ops-dependabot-enable/test.sh
+    bash actions/glibc-floor/test.sh
 
 # Lint all reusable and self workflows (requires actionlint on PATH).
 actionlint:

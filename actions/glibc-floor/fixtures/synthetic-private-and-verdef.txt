@@ -1,0 +1,9 @@
+
+Version needs section '.gnu.version_r' contains 1 entries:
+ Addr: 0x0000000000001000  Offset: 0x001000  Link: 4 (.dynstr)
+  000000: Version: 1  File: libc.so.6  Cnt: 2
+  0x0010:   Name: GLIBC_2.17  Flags: none  Version: 2
+  0x0020:   Name: GLIBC_PRIVATE  Flags: none  Version: 3
+
+Version definition section '.gnu.version_d' contains 1 entry:
+  Addr: 0x0000000000002000  Offset: 0x002000  Rev: 1  Flags: BASE   Index: 1  Cnt: 1  Name: GLIBC_9.99
