@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-11-26
+
 ### Added
 
 - `release-rust.yml`: opt-in `glibc-floor`, the newest glibc symbol version (MAJOR.MINOR, e.g. `2.31`) the `*-unknown-linux-gnu` binaries may require (#138). `plan` validates it (MAJOR.MINOR within glibc 2.x and ≥ 2.17, the oldest glibc Rust supports; a gnu target must be present in `targets`). When set, both gnu targets build with `cargo zigbuild --release --locked --target <triple>.<floor>` instead of the apt cross toolchain — zig 0.17.1 (released 2026-11-02) installed from the official ziglang PyPI wheel (uploaded to PyPI 2026-11-05, published from codeberg.org/ziglang/zig-pypi) with the Fastly-mirror tarball as fallback, and cargo-zigbuild 0.24.1 (released 2026-11-04) from its GitHub release musl binary — each sha256-pinned. A `Check glibc floor` step then runs the private `$/actions/glibc-floor` composite, which fails the build when a binary needs a newer `GLIBC_x.y`; every variant is checked and `sbom` is unchanged. Under a floor `cross-packages` must stay at its default (plan fails closed — apt arm64 packages are built for Ubuntu 24.04's glibc 2.39 and cannot be linked under a lower floor), `cross-env` still applies to `aarch64-unknown-linux-gnu` without the gcc linker line, and the setup-rust cache key gains a `-glibc<floor>` suffix. The apt cross path is used only when the input is unset: callers that leave it empty get a byte-identical plan matrix — proven by `contract/release-rust-plan.test.ts` goldens generated from `0b8a72a` — and unchanged job, check, artifact and asset names.
